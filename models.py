@@ -117,6 +117,9 @@ class Blockchain(models.Model):
         choices=SETTINGS['PROVIDERS'],
     )
 
+    def __str__(self):
+        return self.name
+
     @property
     def provider(self):
         parts = self.provider_class.split('.')
