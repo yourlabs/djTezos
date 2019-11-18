@@ -69,6 +69,9 @@ class Account(models.Model):
             ('blockchain', 'address'),
         )
 
+    def __str__(self):
+        return self.address
+
     @property
     def provider(self):
         return self.blockchain.provider
