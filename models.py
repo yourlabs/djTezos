@@ -64,11 +64,10 @@ class Account(models.Model):
         on_delete=models.SET_NULL,
     )
 
-    # tezos: all on same address
-    #class Meta:
-    #    unique_together = (
-    #        ('blockchain', 'address'),
-    #    )
+    class Meta:
+        unique_together = (
+            ('blockchain', 'address'),
+        )
 
     @property
     def provider(self):
