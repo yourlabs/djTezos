@@ -89,8 +89,18 @@ class Provider(BaseProvider):
         i = 300
         while True:
             try:
-                opg = client.shell.blocks[-5:].find_operation(transaction.txhash)
-                break
+                opg = client.shell.blocks[
+                      -(5 + int(self.blockchain.confirmation_blocks)):
+                      ].find_operation(transaction.txhash)
+                # client.shell.wait_next_block() (might be a better alternative to wait for blocks to append)
+                # level_operation = opg['contents'][0]['level']  (not always present)
+
+                # level of the chain latest block
+                level_position = client.shell.head.metadata()['level']['level_position']
+                operation_block_id = opg['branch']
+                level_operation = client.shell.blocks[operation_block_id].level()
+                if (level_position - level_operation >= self.blockchain.confirmation_blocks):
+                    break
             except:
                 if i:
                     time.sleep(1)

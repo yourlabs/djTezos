@@ -3,6 +3,7 @@ import logging
 import json
 import os
 import re
+import time
 
 from web3 import Web3
 import web3.exceptions
@@ -139,6 +140,19 @@ class Provider(BaseProvider):
             transaction.txhash,
             3600 * 24
         )
+
+        block_number = self.client.eth.blockNumber
+        receipt_block_number = receipt['blockNumber']
+
+        while block_number - receipt_block_number < self.blockchain.confirmation_blocks:
+            time.sleep(5)
+            receipt = self.client.eth.waitForTransactionReceipt(
+                transaction.txhash,
+                3600 * 24
+            )
+            block_number = self.client.eth.blockNumber
+            receipt_block_number = receipt['blockNumber']
+
         transaction.gas = receipt['gasUsed']
         transaction.block = Block.objects.get_or_create(
             blockchain=self.blockchain,

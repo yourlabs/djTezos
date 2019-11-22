@@ -26,6 +26,7 @@ class BlockchainSerializer(serializers.HyperlinkedModelSerializer):
             'endpoint',
             'provider_class',
             'url',
+            'confirmation_blocks',
         )
 
 

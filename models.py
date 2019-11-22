@@ -118,6 +118,7 @@ class Blockchain(models.Model):
         max_length=255,
         choices=SETTINGS['PROVIDERS'],
     )
+    confirmation_blocks = models.IntegerField(default=0)
 
     def __str__(self):
         return self.name
