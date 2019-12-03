@@ -119,10 +119,11 @@ class Blockchain(models.Model):
         choices=SETTINGS['PROVIDERS'],
     )
     confirmation_blocks = models.IntegerField(default=0)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name
-
 
     @property
     def provider(self):

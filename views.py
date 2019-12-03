@@ -33,6 +33,10 @@ class BlockchainViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = BlockchainSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        return qs.filter(is_active=True)
+
 
 class TransactionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Transaction.objects.all()

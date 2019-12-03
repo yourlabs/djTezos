@@ -22,10 +22,12 @@ class BlockchainSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Blockchain
         fields = (
+            'url',
             'name',
             'endpoint',
             'provider_class',
-            'url',
+            'is_active',
+            'description',
             'confirmation_blocks',
         )
 

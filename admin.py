@@ -27,11 +27,18 @@ admin.site.register(Block)
 
 class BlockchainAdmin(admin.ModelAdmin):
     list_display = (
+        'is_active',
         'name',
         'endpoint',
     )
     list_filter = (
         'provider_class',
+    )
+    list_display_links = (
+        'name',
+    )
+    list_editable = (
+        'is_active',
     )
 
 admin.site.register(Blockchain, BlockchainAdmin)
