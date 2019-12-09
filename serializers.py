@@ -7,15 +7,6 @@ from .models import (
 )
 
 
-class AccountSerializer(serializers.HyperlinkedModelSerializer):
-    class Meta:
-        model = Account
-        fields = (
-            'url',
-            'address',
-            'blockchain',
-            'owner',
-        )
 
 
 class BlockchainSerializer(serializers.HyperlinkedModelSerializer):
@@ -29,6 +20,18 @@ class BlockchainSerializer(serializers.HyperlinkedModelSerializer):
             'is_active',
             'description',
             'confirmation_blocks',
+        )
+
+class AccountSerializer(serializers.HyperlinkedModelSerializer):
+    blockchain = BlockchainSerializer(required=False)
+
+    class Meta:
+        model = Account
+        fields = (
+            'url',
+            'address',
+            'blockchain',
+            'owner',
         )
 
 
