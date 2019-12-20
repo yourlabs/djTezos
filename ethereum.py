@@ -11,7 +11,7 @@ import web3.exceptions
 from djcall.models import Caller
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
-from tenacity import retry, stop_after_attempt
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 from .models import Block
 from .provider import BaseProvider
@@ -95,14 +95,21 @@ class Provider(BaseProvider):
         logger.info(f'{contract_name}.deploy({args}): {result}')
         return result
 
-    @retry(reraise=True, stop=stop_after_attempt(7))
+    @retry(wait=wait_fixed(2), reraise=True, stop=stop_after_attempt(7))
     def write_transaction(self, sender, private_key, tx):
+        SET_GAS_LIMIT = False
+        GAS_MULTIPLIER = 2
         try:
             nonce = self.client.eth.getTransactionCount(sender)
-            built = tx.buildTransaction({
+            options = {
                 'from': sender,
                 'nonce': nonce
-            })
+            }
+            if SET_GAS_LIMIT:
+                gas_estimate = self.client.eth.estimateGas(tx)
+                options['gas'] = gas_estimate * GAS_MULTIPLIER
+            built = tx.buildTransaction(options)
+
             signed_txn = self.client.eth.account.sign_transaction(
                 built,
                 private_key=private_key
@@ -206,6 +213,9 @@ class Provider(BaseProvider):
             web3.exceptions.ValidationError,
         ) as e:
             # todo: handle other kinds of error
+            # in one case whilst testing locally :
+            #    e was "BadFunctionCallOutput('Could not transact with/call contract function,
+            #    is contract deployed correctly and chain synced?')"
             msg = re.match(  # noqa
                 ".*b'([\\\]x[0-9a-z]{2,3} ?)+(?P<msg>[^\\\]+)",  # noqa
                 e.args[0]
