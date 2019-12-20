@@ -103,11 +103,14 @@ class Provider(BaseProvider):
             nonce = self.client.eth.getTransactionCount(sender)
             options = {
                 'from': sender,
-                'nonce': nonce
+                'nonce': nonce,
+                'gas': 4712388 # todo: use estimateGas()
             }
             if SET_GAS_LIMIT:
-                gas_estimate = self.client.eth.estimateGas(tx)
-                options['gas'] = gas_estimate * GAS_MULTIPLIER
+                # gas_estimate = self.client.eth.estimateGas(tx)
+                gas_estimate = tx.estimateGas()
+                options['gas'] = min(4712388, gas_estimate * GAS_MULTIPLIER)
+                logger.info(f'gasestimate = {options["gas"]}')
             built = tx.buildTransaction(options)
 
             signed_txn = self.client.eth.account.sign_transaction(
