@@ -104,8 +104,10 @@ class Provider(BaseProvider):
             options = {
                 'from': sender,
                 'nonce': nonce,
-                'gas': 4712388 # todo: use estimateGas()
             }
+            if self.blockchain.name == 'ethlocal':
+                options['gas'] = 4712388
+            # https://docs.kaleido.io/faqs/why-am-i-getting-transaction-out-of-gas-errors/
             if SET_GAS_LIMIT:
                 # gas_estimate = self.client.eth.estimateGas(tx)
                 gas_estimate = tx.estimateGas()
