@@ -234,12 +234,16 @@ class Transaction(models.Model):
         )
 
     def save(self, *args, **kwargs):
-        if not self.hold and not self.txhash:
+        if os.getenv('DJBLOCKCHAIN_MOCK', None):
+            pass
+        elif not self.hold and not self.txhash:
             self.txhash = self.deploy()
 
         result = super().save(*args, **kwargs)
 
-        if self.txhash and not self.accepted:
+        if os.getenv('DJBLOCKCHAIN_MOCK', None):
+            self.postdeploy()
+        elif self.txhash and not self.accepted:
             self.watch()
 
         return result
