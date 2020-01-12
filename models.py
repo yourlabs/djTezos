@@ -241,9 +241,7 @@ class Transaction(models.Model):
 
         result = super().save(*args, **kwargs)
 
-        if os.getenv('DJBLOCKCHAIN_MOCK', None):
-            self.postdeploy()
-        elif self.txhash and not self.accepted:
+        if self.txhash and not self.accepted:
             self.watch()
 
         return result
