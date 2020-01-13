@@ -205,10 +205,11 @@ class Transaction(models.Model):
     contract = models.ForeignKey(
         'self',
         null=True,
+        blank=True,
         on_delete=models.CASCADE,
         related_name='call_set',
     )
-    function = models.CharField(max_length=100, null=True)
+    function = models.CharField(max_length=100, null=True, blank=True)
     args = JSONField(null=True)
     hold = models.BooleanField(default=False)
 
