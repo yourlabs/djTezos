@@ -9,6 +9,7 @@ from django.conf import settings
 from pytezos import Contract, Key, pytezos
 from tenacity import retry, stop_after_attempt
 
+from .models import Account
 from .provider import BaseProvider
 
 logger = logging.getLogger('djblockchain.tezos')
@@ -18,8 +19,45 @@ SETTINGS.update(getattr(settings, 'DJBLOCKCHAIN', {}))
 
 
 class Provider(BaseProvider):
+    sandbox_ids = (
+        'edsk3gUfUPyBSfrS9CCgmCiQsTCHGkviBDusMxDJstFtojtc1zcpsh',
+        'edsk39qAm1fiMjgmPkw1EgQYkMzkJezLNewd7PLNHTkr6w9XA2zdfo',
+        'edsk4ArLQgBTLWG5FJmnGnT689VKoqhXwmDPBuGx3z4cvwU9MmrPZZ',
+        'edsk2uqQB9AY4FvioK2YMdfmyMrer5R8mGFyuaLLFfSRo8EoyNdht3',
+        'edsk4QLrcijEffxV31gGdN2HU7UpyJjA8drFoNcmnB28n89YjPNRFm',
+    )
+
     def create_wallet(self, passphrase):
         key = pytezos.key.generate(passphrase)
+        if self.blockchain.name == 'tzlocal':
+            found = None
+
+            for sandbox_id in self.sandbox_ids:
+                sandbox = pytezos.key.from_encoded_key(sandbox_id)
+                existing = Account.objects.filter(
+                    address=sandbox.public_key_hash()
+                )
+                if not existing:
+                    found = key = sandbox
+                    break
+
+            if not found:
+                balances = dict()
+
+                for sandbox_id in self.sandbox_ids:
+                    sandbox = pytezos.key.from_encoded_key(sandbox_id)
+                    client = pytezos.using(
+                        key=sandbox,
+                        shell=self.blockchain.endpoint,
+                    )
+                    balances[client.balance()] = client
+
+                client = balances[max(balances)]
+                client.transaction(
+                    amount=10000,
+                    destination=key.public_key_hash()
+                ).autofill().sign().inject()
+
         return key.public_key_hash(), key.secret_exponent
 
     def get_client(self, private_key):

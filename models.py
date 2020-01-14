@@ -92,6 +92,7 @@ def account_wallet(sender, instance, **kwargs):
     instance.address, private_key = (
         instance.blockchain.provider.create_wallet(passphrase)
     )
+
     instance.crypted_key = encrypt(private_key)
 signals.pre_save.connect(account_wallet, sender=Account)
 
@@ -132,12 +133,6 @@ class Blockchain(models.Model):
             '.'.join(parts[:-1])
         )
         return getattr(mod, parts[-1])(self)
-
-
-def blockchain_hacks(sender, instance, **kwargs):
-    if os.getenv('CI') and 'ethereum' in instance.provider_class:
-        instance.endpoint = 'http://eth:8545'
-signals.pre_save.connect(blockchain_hacks, sender=Blockchain)
 
 
 def blockchain_wallets(sender, instance, **kwargs):
