@@ -226,6 +226,7 @@ class Provider(BaseProvider):
                 e.args[0]
             ).group('msg')
             raise Exception(msg)
+            # raise Exception(e.args[0])
 
         # value returned is either a single value
         if len(func.abi['outputs']) == 1:
