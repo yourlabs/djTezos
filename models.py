@@ -235,7 +235,8 @@ class Transaction(models.Model):
 
     def save(self, *args, **kwargs):
         if os.getenv('DJBLOCKCHAIN_MOCK', None):
-            pass
+            self.satus = 'Mocked'
+            self.accepted = True
         elif not self.hold and not self.txhash:
             self.txhash = self.deploy()
 
