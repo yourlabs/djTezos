@@ -8,6 +8,8 @@ from djcall.models import Caller
 from django.conf import settings
 from pytezos import Contract, Key, pytezos
 from tenacity import retry, stop_after_attempt
+from rest_framework.exceptions import ValidationError
+from pytezos.rpc.node import RpcError
 
 from .models import Account
 from .provider import BaseProvider
@@ -76,6 +78,35 @@ class Provider(BaseProvider):
     def deploy(self, sender, private_key, contract_name, *args):
         logger.debug(f'{contract_name}.deploy({args}): start')
         client = self.get_client(private_key)
+
+        if not client.balance():
+            raise ValidationError(f'{sender} needs more than 0 tezies')
+
+        # key reveal dance
+        try:
+            operation = client.reveal().autofill().sign().inject()
+        except RpcError as e:
+            if 'previously_revealed_key' in e.args[0]['id']:
+                pass
+        else:
+            logger.debug(f'Revealing {sender}')
+            opg = None
+            tries = 100
+            while tries and not opg:
+                try:
+                    opg = client.shell.blocks[-20:].find_operation(operation['hash'])
+                    if opg['contents'][0]['metadata']['operation_result']['status'] == 'applied':
+                        logger.info(f'Revealed {sender}')
+                        break
+                    else:
+                        raise StopIteration()
+                except StopIteration:
+                    opg = None
+                tries -= 1
+                time.sleep(1)
+            if not opg:
+                raise ValidationError(f'Could not reveal {sender}')
+
         tx = dict(
             code=json.loads(
                 open(
