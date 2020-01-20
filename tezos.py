@@ -43,6 +43,8 @@ class Provider(BaseProvider):
                     found = key = sandbox
                     break
 
+            '''
+            fucking tezos replies with empty rpc errors, disabling feature
             if not found:
                 balances = dict()
 
@@ -62,6 +64,7 @@ class Provider(BaseProvider):
                         destination=key.public_key_hash()
                     ).autofill().sign().inject()
                 )
+            '''
 
         return key.public_key_hash(), key.secret_exponent
 
