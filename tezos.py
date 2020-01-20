@@ -55,10 +55,13 @@ class Provider(BaseProvider):
                     balances[client.balance()] = client
 
                 client = balances[max(balances)]
-                client.transaction(
-                    amount=10000,
-                    destination=key.public_key_hash()
-                ).autofill().sign().inject()
+                opg = self.wait_injection(
+                    client,
+                    client.transaction(
+                        amount=10000,
+                        destination=key.public_key_hash()
+                    ).autofill().sign().inject()
+                )
 
         return key.public_key_hash(), key.secret_exponent
 
@@ -73,6 +76,23 @@ class Provider(BaseProvider):
             SETTINGS['TEZOS_CONTRACTS'],
             contract_name + '.json'
         )
+
+    def wait_injection(self, client, operation):
+        opg = None
+        tries = 100
+        while tries and not opg:
+            try:
+                opg = client.shell.blocks[-20:].find_operation(operation['hash'])
+                if opg['contents'][0]['metadata']['operation_result']['status'] == 'applied':
+                    logger.info(f'Revealed {sender}')
+                    break
+                else:
+                    raise StopIteration()
+            except StopIteration:
+                opg = None
+            tries -= 1
+            time.sleep(1)
+        return opg
 
     @retry(reraise=True, stop=stop_after_attempt(30))
     def deploy(self, sender, private_key, contract_name, *args):
@@ -90,20 +110,7 @@ class Provider(BaseProvider):
                 pass
         else:
             logger.debug(f'Revealing {sender}')
-            opg = None
-            tries = 100
-            while tries and not opg:
-                try:
-                    opg = client.shell.blocks[-20:].find_operation(operation['hash'])
-                    if opg['contents'][0]['metadata']['operation_result']['status'] == 'applied':
-                        logger.info(f'Revealed {sender}')
-                        break
-                    else:
-                        raise StopIteration()
-                except StopIteration:
-                    opg = None
-                tries -= 1
-                time.sleep(1)
+            opg = self.wait_injection(client, operation)
             if not opg:
                 raise ValidationError(f'Could not reveal {sender}')
 
