@@ -13,6 +13,7 @@ class BlockchainSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Blockchain
         fields = (
+            'id',
             'url',
             'name',
             'endpoint',
