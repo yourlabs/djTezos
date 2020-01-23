@@ -205,7 +205,7 @@ class Transaction(models.Model):
         related_name='call_set',
     )
     function = models.CharField(max_length=100, null=True, blank=True)
-    args = JSONField(null=True, default=[])
+    args = JSONField(null=True, default=list)
     hold = models.BooleanField(default=False)
 
     @property
