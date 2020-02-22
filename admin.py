@@ -43,4 +43,23 @@ class BlockchainAdmin(admin.ModelAdmin):
 
 admin.site.register(Blockchain, BlockchainAdmin)
 
-admin.site.register(Transaction)
+
+class TransactionAdmin(admin.ModelAdmin):
+    list_display = (
+        'txhash',
+        'status',
+        'contract_name',
+        'function',
+        'updated_at'
+    )
+    search_fields = (
+        'txhash',
+    )
+    list_filter = (
+        'status',
+        'contract_name',
+        'function',
+    )
+    ordering = ['-updated_at']
+
+admin.site.register(Transaction, TransactionAdmin)
