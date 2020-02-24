@@ -224,8 +224,11 @@ class Provider(BaseProvider):
             msg = re.match(  # noqa
                 ".*b'([\\\]x[0-9a-z]{2,3} ?)+(?P<msg>[^\\\]+)",  # noqa
                 e.args[0]
-            ).group('msg')
-            raise Exception(msg)
+            )
+            if not msg:
+                raise Exception(e.args[0])
+            else:
+                raise Exception(msg.group('msg'))
             # raise Exception(e.args[0])
 
         # value returned is either a single value
