@@ -7,6 +7,7 @@ import os
 from djcall.models import Caller
 from django.conf import settings
 from pytezos import Contract, Key, pytezos
+from mnemonic import Mnemonic
 from tenacity import retry, stop_after_attempt
 from rest_framework.exceptions import ValidationError
 from pytezos.rpc.node import RpcError
@@ -30,7 +31,8 @@ class Provider(BaseProvider):
     )
 
     def create_wallet(self, passphrase):
-        key = pytezos.key.generate(passphrase)
+        mnemonic = Mnemonic('english').generate(128)
+        key = Key.from_mnemonic(mnemonic, passphrase, curve=b'ed')
         if self.blockchain.name == 'tzlocal':
             found = None
 
