@@ -106,9 +106,8 @@ class Provider(BaseProvider):
         GAS_MULTIPLIER = 2
         try:
             from .models import Transaction
-            # filter out if txhash == ''
-            # we could set up a lock if a transaction has been sent but not received
-            # then wait before getting nonce via self.client.eth.getTransactionCount
+            # check out lock(1) usage in djblockchain, allows use to safely use nonce_db
+            # filter out if txhash == '' ?
             nonce_db = Transaction.objects.filter(sender__address=sender).count()
             nonce = self.client.eth.getTransactionCount(sender)
             logger.info(f'from {sender}, gettxcount nonce = {nonce} / nonce_db = {nonce_db}')
@@ -116,14 +115,18 @@ class Provider(BaseProvider):
                 'from': sender,
                 'nonce': nonce_db,
             }
-            # if self.blockchain.name == 'ethlocal':
-            #     options['gas'] = 4712388
             # https://docs.kaleido.io/faqs/why-am-i-getting-transaction-out-of-gas-errors/
-            if SET_GAS_LIMIT:
+            if SET_GAS_LIMIT and self.blockchain.name != 'ethlocal':
                 # gas_estimate = self.client.eth.estimateGas(tx)
-                gas_estimate = tx.estimateGas()
-                options['gas'] = min(4712388, gas_estimate * GAS_MULTIPLIER)
-                logger.info(f'gasestimate = {options["gas"]}')
+                try:
+                    # deploy transaction estimate
+                    gas_estimate = tx.estimateGas()
+                    options['gas'] = min(10000000, gas_estimate * GAS_MULTIPLIER)
+                    logger.info(f'gasestimate = {options["gas"]}')
+                except ValueError:
+                    # send transaction estimate
+                    options['gas'] = self.client.eth.estimateGas(tx.buildTransaction(options))
+                    logger.info(f'gasestimate = {options["gas"]}')
             built = tx.buildTransaction(options)
 
             signed_txn = self.client.eth.account.sign_transaction(
