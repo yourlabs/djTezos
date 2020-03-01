@@ -1,6 +1,8 @@
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import action
 
+from django import http
 from django.db.models import Q
 
 from .models import (
@@ -27,6 +29,19 @@ class AccountViewSet(viewsets.ReadOnlyModelViewSet):
             owner=self.request.role.entity_represented
         )
 
+    @action(detail=True, methods=['get'])  # noqa: C901
+    def details(self, request, pk):
+        try:
+            account = self.get_queryset().get(pk=pk)
+            balance = account.blockchain.provider.get_balance(
+                account.address,
+                account.private_key,
+            )
+            return http.JsonResponse({
+                'balance': balance,
+            })
+        except Account.DoesNotExist:
+            raise http.Http404
 
 class BlockchainViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Blockchain.objects.all()

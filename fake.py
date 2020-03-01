@@ -30,6 +30,9 @@ class Provider(BaseProvider):
         return None
         '''
 
+    def get_balance(self, account_address, private_key):
+        return 1234
+
     def deploy(self, sender, private_key, contract_name, *args):
         return uuid4()
 

@@ -68,6 +68,11 @@ class Provider(BaseProvider):
 
         return key.public_key_hash(), key.secret_exponent
 
+    def get_balance(self, account_address, private_key):
+        client = self.get_client(private_key)
+        balance = client.account()['balance']
+        return balance
+
     def get_client(self, private_key):
         return pytezos.using(
             key=Key.from_secret_exponent(private_key),

@@ -32,6 +32,11 @@ class Provider(BaseProvider):
         acct = self.client.eth.account.create(passphrase)
         return acct.address, acct.privateKey
 
+    def get_balance(self, account_address, private_key):
+        balance_wei = self.client.eth.getBalance(account_address)
+        balance_ether = self.client.fromWei(balance_wei, 'ether')
+        return balance_ether
+
     def get_contract_path(self, contract_name):
         return os.path.join(
             SETTINGS['ETHEREUM_CONTRACTS'],
@@ -100,10 +105,16 @@ class Provider(BaseProvider):
         SET_GAS_LIMIT = False
         GAS_MULTIPLIER = 2
         try:
+            from .models import Transaction
+            # filter out if txhash == ''
+            # we could set up a lock if a transaction has been sent but not received
+            # then wait before getting nonce via self.client.eth.getTransactionCount
+            nonce_db = Transaction.objects.filter(sender__address=sender).count()
             nonce = self.client.eth.getTransactionCount(sender)
+            logger.info(f'from {sender}, gettxcount nonce = {nonce} / nonce_db = {nonce_db}')
             options = {
                 'from': sender,
-                'nonce': nonce,
+                'nonce': nonce_db,
             }
             # if self.blockchain.name == 'ethlocal':
             #     options['gas'] = 4712388
