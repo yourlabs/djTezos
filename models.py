@@ -1,8 +1,13 @@
 import importlib
-import os
 import random
 import string
 import uuid
+import logging
+
+try:
+    import uwsgi
+except ImportError:
+    uwsgi = None
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -13,6 +18,8 @@ from django.db.models import signals
 from cryptography.hazmat.primitives.ciphers import (
     Cipher, algorithms, modes)
 from cryptography.hazmat.backends import default_backend
+
+logger = logging.getLogger('djblockchain')
 
 
 SETTINGS = dict(
@@ -234,15 +241,24 @@ class Transaction(models.Model):
         )
 
     def save(self, *args, **kwargs):
+        result = None
         if not self.hold and not self.txhash:
-            self.txhash = self.deploy()
-
+            if uwsgi:
+                # WIP: ideally, we would only lock based on the tx sender address
+                logger.debug(
+                    f'\nsetting lock for tx {self.id} = {self} contract {self.contract} fn {self.function}\n')
+                uwsgi.lock(1)
+            try:
+                self.txhash = self.deploy()
+            finally:
+                if uwsgi:
+                    logger.debug(f'unlocking for tx {self.id} = {self} contract {self.contract} fn {self.function}')
+                    uwsgi.unlock(1)
         result = super().save(*args, **kwargs)
-
         if self.txhash and not self.accepted:
             self.watch()
-
         return result
+
 
     def postdeploy(self):
         pass
