@@ -248,11 +248,13 @@ class Transaction(models.Model):
                 logger.debug(
                     f'\nsetting lock for tx {self.id} = {self} contract {self.contract} fn {self.function}\n')
                 # uwsgi.lock(1)
+                uwsgi.sharedarea_wlock(0)
             try:
                 self.txhash = self.deploy()
             finally:
                 if uwsgi:
                     logger.debug(f'\nunlocking for tx {self.id} = {self} contract {self.contract} fn {self.function}\n')
+                    uwsgi.sharedarea_unlock(0)
                     # uwsgi.unlock(1)
         result = super().save(*args, **kwargs)
         if self.txhash and not self.accepted:

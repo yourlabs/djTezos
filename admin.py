@@ -50,6 +50,8 @@ class TransactionAdmin(admin.ModelAdmin):
         'status',
         'contract_name',
         'function',
+        'sender',
+        'args',
         'updated_at'
     )
     search_fields = (
