@@ -247,13 +247,13 @@ class Transaction(models.Model):
                 # WIP: ideally, we would only lock based on the tx sender address
                 logger.debug(
                     f'\nsetting lock for tx {self.id} = {self} contract {self.contract} fn {self.function}\n')
-                uwsgi.lock(1)
+                # uwsgi.lock(1)
             try:
                 self.txhash = self.deploy()
             finally:
                 if uwsgi:
-                    logger.debug(f'unlocking for tx {self.id} = {self} contract {self.contract} fn {self.function}')
-                    uwsgi.unlock(1)
+                    logger.debug(f'\nunlocking for tx {self.id} = {self} contract {self.contract} fn {self.function}\n')
+                    # uwsgi.unlock(1)
         result = super().save(*args, **kwargs)
         if self.txhash and not self.accepted:
             self.watch()
