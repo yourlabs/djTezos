@@ -34,15 +34,13 @@ class Provider(BaseProvider):
         mnemonic = Mnemonic('english').generate(128)
         key = Key.from_mnemonic(mnemonic, passphrase, curve=b'ed')
         if self.blockchain.name == 'tzlocal':
-            found = None
-
             for sandbox_id in self.sandbox_ids:
                 sandbox = pytezos.key.from_encoded_key(sandbox_id)
                 existing = Account.objects.filter(
                     address=sandbox.public_key_hash()
                 )
+                key = sandbox
                 if not existing:
-                    found = key = sandbox
                     break
 
             '''

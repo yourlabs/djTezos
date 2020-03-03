@@ -71,11 +71,6 @@ class Account(models.Model):
         on_delete=models.SET_NULL,
     )
 
-    class Meta:
-        unique_together = (
-            ('blockchain', 'address'),
-        )
-
     def __str__(self):
         return self.address
 

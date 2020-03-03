@@ -67,7 +67,9 @@ class Provider(BaseProvider):
             raise Exception(f'{function_name} not found in {contract_name}')
 
         func = funcs[0]
+
         args = list(args)
+
 
         for i, inp in enumerate(func.abi.get('inputs', [])):
             if inp['type'].startswith('bytes32'):
