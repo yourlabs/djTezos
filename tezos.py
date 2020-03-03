@@ -140,6 +140,10 @@ class Provider(BaseProvider):
             origination = tx.inject()
             return origination['hash']
         except RpcError as e:
+            if not len(e.args) or not isinstance(e.args[0], dict):
+                raise
+            if 'msg' not in e.args[0]:
+                raise
             if 'Counter' in e.args[0]['msg']:
                 logger.info(f'{tx.address} counter error')
                 i = 3600
