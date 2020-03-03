@@ -136,8 +136,33 @@ class Provider(BaseProvider):
         return result
 
     def write_transaction(self, sender, private_key, tx):
-        origination = tx.inject()
-        return origination['hash']
+        try:
+            origination = tx.inject()
+            return origination['hash']
+        except RpcError as e:
+            if 'Counter' in e.args[0]['msg']:
+                logger.info(f'{tx.address} counter error')
+            else:
+                logger.info(f'{tx.address} other rpc error')
+                raise
+            i = 300
+            origination = None
+            while True:
+                try:
+                    logger.info(f"{tx.address} try #{300 - i + 1}")
+                    origination = tx.inject()
+                    if 'hash' in origination:
+                        logger.info(f"{tx.address} HASH = " + str(origination['hash']))
+                        break
+                except:
+                    if i:
+                        time.sleep(1)
+                        # tx.shell.wait_next_block()
+                        i -= 1
+                    else:
+                        raise
+            logger.info(f"{tx.address} RETURNING HASH = " + str(origination['hash']))
+            return origination['hash']
 
     @retry(reraise=True, stop=stop_after_attempt(30))
     def send(self,
@@ -149,6 +174,7 @@ class Provider(BaseProvider):
              *args):
         logger.debug(f'{contract_name}.{function_name}({args}): start')
         client = self.get_client(private_key)
+        logger.debug(f'{contract_name}.{function_name}({args}): counter = {client.account()["counter"]}')
         ci = client.contract(contract_address)
         method = getattr(ci, function_name)
         tx = method(*args)
