@@ -145,7 +145,7 @@ class Provider(BaseProvider):
             else:
                 logger.info(f'{tx.address} other rpc error')
                 raise
-            i = 300
+            i = 3600
             origination = None
             while True:
                 try:
@@ -156,7 +156,7 @@ class Provider(BaseProvider):
                         break
                 except:
                     if i:
-                        time.sleep(1)
+                        time.sleep(5)
                         # tx.shell.wait_next_block()
                         i -= 1
                     else:
