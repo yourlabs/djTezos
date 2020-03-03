@@ -142,27 +142,27 @@ class Provider(BaseProvider):
         except RpcError as e:
             if 'Counter' in e.args[0]['msg']:
                 logger.info(f'{tx.address} counter error')
+                i = 3600
+                origination = None
+                while True:
+                    try:
+                        logger.info(f"{tx.address} try #{300 - i + 1}")
+                        origination = tx.inject()
+                        if 'hash' in origination:
+                            logger.info(f"{tx.address} HASH = " + str(origination['hash']))
+                            break
+                    except:
+                        if i:
+                            time.sleep(5)
+                            # tx.shell.wait_next_block()
+                            i -= 1
+                        else:
+                            raise
+                logger.info(f"{tx.address} RETURNING HASH = " + str(origination['hash']))
+                return origination['hash']
             else:
                 logger.info(f'{tx.address} other rpc error')
                 raise
-            i = 3600
-            origination = None
-            while True:
-                try:
-                    logger.info(f"{tx.address} try #{300 - i + 1}")
-                    origination = tx.inject()
-                    if 'hash' in origination:
-                        logger.info(f"{tx.address} HASH = " + str(origination['hash']))
-                        break
-                except:
-                    if i:
-                        time.sleep(5)
-                        # tx.shell.wait_next_block()
-                        i -= 1
-                    else:
-                        raise
-            logger.info(f"{tx.address} RETURNING HASH = " + str(origination['hash']))
-            return origination['hash']
 
     @retry(reraise=True, stop=stop_after_attempt(30))
     def send(self,
