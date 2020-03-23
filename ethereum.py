@@ -129,7 +129,18 @@ class Provider(BaseProvider):
                     # send transaction estimate
                     options['gas'] = self.client.eth.estimateGas(tx.buildTransaction(options))
                     logger.info(f'gasestimate = {options["gas"]}')
-            built = tx.buildTransaction(options)
+
+            try:
+                built = tx.buildTransaction(options)
+            except ValueError as exc:
+                if 'code' in exc.args[0] and exc.args[0]['code'] == -32000 and 'gas required exceeds allowance' in exc.args[0]['message']:
+                    # force set gas https://github.com/ethers-io/ethers.js/issues/469#issuecomment-475926538
+                    options['gas'] = 20_000_000
+                    options['gas'] = self.client.eth.estimateGas(tx.buildTransaction(options))
+                    logger.info(f'requiring = {options["gas"]} of gas')
+                    built = tx.buildTransaction(options)
+                else:
+                    raise
 
             signed_txn = self.client.eth.account.sign_transaction(
                 built,
