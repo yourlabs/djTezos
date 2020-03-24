@@ -37,6 +37,7 @@ class AccountSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class TransactionSerializer(serializers.ModelSerializer):
+    blockchain = BlockchainSerializer(required=False)
     class Meta:
         model = Transaction
         fields = (
@@ -53,4 +54,5 @@ class TransactionSerializer(serializers.ModelSerializer):
             'contract_name',
             'function',
             'args',
+            'blockchain',
         )
