@@ -187,6 +187,8 @@ class Provider(BaseProvider):
         return result
 
     def watch(self, transaction, spool=True, postdeploy_kwargs=None):
+        if transaction.status:
+            return True
         if spool:
             return Caller(
                 callback='djblockchain.tezos.transaction_watch',
@@ -217,7 +219,7 @@ class Provider(BaseProvider):
                     break
             except:
                 if i:
-                    time.sleep(1)
+                    time.sleep(2)
                     i -= 1
                 else:
                     raise

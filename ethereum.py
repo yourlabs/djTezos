@@ -148,6 +148,8 @@ class Provider(BaseProvider):
         )
 
     def watch(self, transaction, spool=True, postdeploy_kwargs=None):
+        if transaction.status:
+            return True
         if spool:
             return Caller(
                 callback='djblockchain.ethereum.transaction_watch',

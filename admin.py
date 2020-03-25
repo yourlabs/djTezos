@@ -19,6 +19,7 @@ class AccountAdmin(admin.ModelAdmin):
     )
     search_fields = (
         'owner__email',
+        'address',
     )
 
 admin.site.register(Account, AccountAdmin)
