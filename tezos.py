@@ -186,6 +186,42 @@ class Provider(BaseProvider):
         logger.debug(f'{contract_name}.{function_name}({args}): {result}')
         return result
 
+    def find_in_past_blocks(self, client, transaction):
+        # find operation in a greater range of past blocks
+        # we get a RPC error when executing .find_operation() on a range of length > 20
+        # here is client.shell.blocks documentation :
+
+        # Lists known heads of the blockchain sorted with decreasing fitness.
+        # Optional arguments allows to returns the list of predecessors for known heads
+        # or the list of predecessors for a given list of blocks.
+        # :param length: The requested number of predecessors to returns (per requested head).
+        # :param head: An empty argument requests blocks from the current heads.
+        # A non empty list allow to request specific fragment of the chain.
+        # :param min_date: When `min_date` is provided, heads with a timestamp before `min_date` are filtered out
+        # :return: list[list[str]]
+        #
+        # []
+        # Construct block query or get a block range.
+        # :param block_id: Block identity or block range
+        # int: Block level or offset from the head if negative;
+        # str: Block hash (base58) or special names (head, genesis), expressions like `head~1` etc;
+        # slice [:]: First value (start) must be int, second (stop) can be any Block ID or empty.
+        # :return: BlockQuery or BlockSliceQuery
+
+        BLOCK_DEPTH = 500
+        level = client.shell.head.level() - int(self.blockchain.confirmation_blocks)
+        min_level = max(level - BLOCK_DEPTH, 0)
+        while level >= min_level:
+            try:
+                opg = client.shell.blocks[max(level - 20, 0):level].find_operation(transaction.txhash)
+                return opg
+            except StopIteration:
+                level -= 20
+                if level < min_level:
+                    raise StopIteration
+        raise StopIteration
+
+
     def watch(self, transaction, spool=True, postdeploy_kwargs=None):
         if transaction.status:
             return True
@@ -205,20 +241,18 @@ class Provider(BaseProvider):
         i = 300
         while True:
             try:
-                opg = client.shell.blocks[
-                      -(5 + int(self.blockchain.confirmation_blocks)):
-                      ].find_operation(transaction.txhash)
-                # client.shell.wait_next_block() (might be a better alternative to wait for blocks to append)
-                # level_operation = opg['contents'][0]['level']  (not always present)
-
                 # level of the chain latest block
                 level_position = client.shell.head.metadata()['level']['level_position']
+                opg = self.find_in_past_blocks(client, transaction)
+                # level_operation = opg['contents'][0]['level']  (not always present)
                 operation_block_id = opg['branch']
                 level_operation = client.shell.blocks[operation_block_id].level()
-                if (level_position - level_operation >= self.blockchain.confirmation_blocks):
+                if level_position - level_operation >= self.blockchain.confirmation_blocks:
+                    logger.info(f'block was found at a depth of : {level_position - level_operation}')
                     break
             except:
                 if i:
+                    # client.shell.wait_next_block() (might be a better alternative to wait for blocks to append)
                     time.sleep(2)
                     i -= 1
                 else:
