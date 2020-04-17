@@ -174,10 +174,10 @@ class Transaction(models.Model):
         auto_now=True,
     )
     txhash = models.CharField(
-        db_index=True,
+        unique=True,
         max_length=255,
         null=True,
-        blank=True
+        blank=True,
     )
     block = models.ForeignKey(
         'Block',
