@@ -248,7 +248,7 @@ class Transaction(models.Model):
                 self.txhash = self.deploy()
             finally:
                 if uwsgi:
-                    logger.debug(f'\nunlocking for tx {self.id} = {self} contract {self.contract} fn {self.function}\n')
+                    logger.debug(f'\nunlocking for tx = {self.id} = {self} contract {self.contract} fn {self.function}\n')
                     uwsgi.sharedarea_unlock(0)
                     # uwsgi.unlock(1)
         result = super().save(*args, **kwargs)

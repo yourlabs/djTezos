@@ -11,6 +11,7 @@ from mnemonic import Mnemonic
 from tenacity import retry, stop_after_attempt
 from rest_framework.exceptions import ValidationError
 from pytezos.rpc.node import RpcError
+from requests.exceptions import ConnectionError
 
 from .models import Account
 from .provider import BaseProvider
@@ -30,42 +31,66 @@ class Provider(BaseProvider):
         'edsk4QLrcijEffxV31gGdN2HU7UpyJjA8drFoNcmnB28n89YjPNRFm',
     )
 
+    def transfer(self, sender, private_key, to_address, value):
+        """
+        rpc error if balance too low :
+        RpcError ({'amount': '120000000000000000',
+              'balance': '3998464237867',
+              'contract': 'tz1gjaF81ZRRvdzjobyfVNsAeSC6PScjfQwN',
+              'id': 'proto.006-PsCARTHA.contract.balance_too_low',
+              'kind': 'temporary'},)
+        """
+        logger.debug(f'trying to transfer {value} from {sender} to {to_address}')
+        client = self.get_client(private_key, reveal=True, sender=sender)
+        tx = client.transaction(destination=to_address, amount=value).autofill().sign()
+        result = self.write_transaction(sender, private_key, tx)
+        return result
+
+    def get_sandbox_account(self):
+        key = None
+        for sandbox_id in self.sandbox_ids:
+            sandbox = pytezos.key.from_encoded_key(sandbox_id)
+            existing = Account.objects.filter(
+                address=sandbox.public_key_hash()
+            )
+            key = sandbox
+            if not existing:
+                return key
+        return key
+
+    def get_richest_sandbox_account(self):
+        balances = dict()
+        for sandbox_id in self.sandbox_ids:
+            sandbox = pytezos.key.from_encoded_key(sandbox_id)
+            sandbox_balance = self.get_balance(sandbox.public_key_hash(), sandbox.secret_exponent)
+            balances[sandbox_balance] = sandbox
+
+        max_tezies = max(balances)
+        return balances[max_tezies]
+
+
     def create_wallet(self, passphrase):
         mnemonic = Mnemonic('english').generate(128)
         key = Key.from_mnemonic(mnemonic, passphrase, curve=b'ed')
         if self.blockchain.name == 'tzlocal':
-            for sandbox_id in self.sandbox_ids:
-                sandbox = pytezos.key.from_encoded_key(sandbox_id)
-                existing = Account.objects.filter(
-                    address=sandbox.public_key_hash()
-                )
-                key = sandbox
-                if not existing:
-                    break
-
-            '''
-            fucking tezos replies with empty rpc errors, disabling feature
-            if not found:
-                balances = dict()
-
-                for sandbox_id in self.sandbox_ids:
-                    sandbox = pytezos.key.from_encoded_key(sandbox_id)
-                    client = pytezos.using(
-                        key=sandbox,
-                        shell=self.blockchain.endpoint,
+            # during tests, use sandbox accounts to avoid having to make time-eating transfers
+            if 'DJBLOCKCHAIN_MOCK' in os.environ and os.environ['DJBLOCKCHAIN_MOCK']:
+                key = self.get_sandbox_account()
+            else:
+                # pick the sandbox account with the most tezies and transfer to the new account
+                DEFAULT_TZLOCAL_TEZIES = 1_200_000_000
+                try:
+                    richest_sandbox = self.get_richest_sandbox_account()
+                    self.transfer(
+                        richest_sandbox.public_key_hash(),
+                        richest_sandbox.secret_exponent,
+                        key.public_key_hash(),
+                        DEFAULT_TZLOCAL_TEZIES
                     )
-                    balances[client.balance()] = client
-
-                client = balances[max(balances)]
-                opg = self.wait_injection(
-                    client,
-                    client.transaction(
-                        amount=10000,
-                        destination=key.public_key_hash()
-                    ).autofill().sign().inject()
-                )
-            '''
-
+                except ConnectionError as e:
+                    key = self.get_sandbox_account()
+                    logger.info(f"Connection error while trying to either get balance or transfer, \
+                    using sandbox account instead")
         return key.public_key_hash(), key.secret_exponent
 
     def get_balance(self, account_address, private_key):
@@ -73,11 +98,26 @@ class Provider(BaseProvider):
         balance = client.account()['balance']
         return balance
 
-    def get_client(self, private_key):
-        return pytezos.using(
+    def get_client(self, private_key, reveal=False, sender=None):
+        client = pytezos.using(
             key=Key.from_secret_exponent(private_key),
             shell=self.blockchain.endpoint,
         )
+        if reveal:
+            # key reveal dance
+            try:
+                operation = client.reveal().autofill().sign().inject()
+            except RpcError as e:
+                if 'previously_revealed_key' in e.args[0]['id']:
+                    return client
+                raise e
+            else:
+                logger.debug(f'Revealing {sender}')
+                opg = self.wait_injection(client, operation)
+                if not opg:
+                    raise ValidationError(f'Could not reveal {sender}')
+
+        return client
 
     def get_contract_path(self, contract_name):
         return os.path.join(
@@ -92,7 +132,7 @@ class Provider(BaseProvider):
             try:
                 opg = client.shell.blocks[-20:].find_operation(operation['hash'])
                 if opg['contents'][0]['metadata']['operation_result']['status'] == 'applied':
-                    logger.info(f'Revealed {sender}')
+                    logger.info(f'Revealed {client.key.public_key_hash()}')
                     break
                 else:
                     raise StopIteration()
@@ -105,22 +145,10 @@ class Provider(BaseProvider):
     @retry(reraise=True, stop=stop_after_attempt(30))
     def deploy(self, sender, private_key, contract_name, *args):
         logger.debug(f'{contract_name}.deploy({args}): start')
-        client = self.get_client(private_key)
+        client = self.get_client(private_key, reveal=True, sender=sender)
 
         if not client.balance():
             raise ValidationError(f'{sender} needs more than 0 tezies')
-
-        # key reveal dance
-        try:
-            operation = client.reveal().autofill().sign().inject()
-        except RpcError as e:
-            if 'previously_revealed_key' in e.args[0]['id']:
-                pass
-        else:
-            logger.debug(f'Revealing {sender}')
-            opg = self.wait_injection(client, operation)
-            if not opg:
-                raise ValidationError(f'Could not reveal {sender}')
 
         tx = dict(
             code=json.loads(
@@ -136,6 +164,13 @@ class Provider(BaseProvider):
         return result
 
     def write_transaction(self, sender, private_key, tx):
+        """
+        When send transaction :
+        tx =    .key  # tz1ddb9NMYHZi5UzPdzTZMYQQZoMub195zgv
+                .shell  # http://localhost:8732 ()
+                .address  # KT1JiMkPbwkrDzLqQsbMGmfkyiBMVjdT5Lh8
+                .amount  # 0
+        """
         try:
             origination = tx.inject()
             return origination['hash']
@@ -148,6 +183,9 @@ class Provider(BaseProvider):
                          'with': {'string': 'Country restriction failed.'}
                          }
             """
+            tx_str = f'tx with sender = {sender}'
+            if hasattr(tx, 'address'):
+                tx_str += f' and address = {tx.address}'
             if not len(e.args) or not isinstance(e.args[0], dict):
                 raise
             if 'id' in e.args[0]:
@@ -158,27 +196,38 @@ class Provider(BaseProvider):
             if 'msg' not in e.args[0]:
                 raise
             if 'Counter' in e.args[0]['msg']:
-                logger.info(f'{tx.address} counter error')
+                logger.info(f'{tx_str} counter error')
                 i = 3600
                 origination = None
+                counter = None
+
                 while True:
                     try:
-                        logger.info(f"{tx.address} try #{300 - i + 1}")
+                        logger.info(f"{tx_str} try #{300 - i + 1}")
+                        if counter:
+                            logger.debug(f"Counter set from {tx.contents[0]['counter']} to {counter}")
+                            tx.contents[0]['counter'] = counter
+                            tx = tx.sign()
                         origination = tx.inject()
                         if 'hash' in origination:
-                            logger.info(f"{tx.address} HASH = " + str(origination['hash']))
+                            logger.info(f"{tx_str} HASH = " + str(origination['hash']))
                             break
-                    except:
+                    except RpcError as e:
+                        if 'expected' in e.args[0] and 'found' in e.args[0]:
+                            expected = e.args[0]['expected']
+                            found = e.args[0]['found']
+                            logger.debug(f'Counter expected = {expected} / found = {found}')
+                            counter = expected
                         if i:
                             time.sleep(5)
                             # tx.shell.wait_next_block()
                             i -= 1
                         else:
                             raise
-                logger.info(f"{tx.address} RETURNING HASH = " + str(origination['hash']))
+                logger.info(f"{tx_str} RETURNING HASH = " + str(origination['hash']))
                 return origination['hash']
             else:
-                logger.info(f'{tx.address} other rpc error')
+                logger.info(f'{tx_str} other rpc error')
                 raise
 
     @retry(reraise=True, stop=stop_after_attempt(30))
