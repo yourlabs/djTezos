@@ -200,6 +200,10 @@ class Provider(BaseProvider):
                 origination = None
                 counter = None
 
+                if hasattr(tx, 'contents') and len(tx.contents) and 'counter' in tx.contents[0]:
+                    logger.debug(f"Counter too low, incrementing it")
+                    counter = str(int(tx.contents[0]['counter']) + 1)
+
                 while True:
                     try:
                         logger.info(f"{tx_str} try #{300 - i + 1}")
