@@ -192,7 +192,6 @@ class Provider(BaseProvider):
                 error_id = e.args[0]['id']
                 if 'script_rejected' in error_id and 'checkTransfer' in tx.view():
                     raise ValidationError(dict(e.args[0]))
-                raise
             if 'msg' not in e.args[0]:
                 raise
             if 'Counter' in e.args[0]['msg']:
