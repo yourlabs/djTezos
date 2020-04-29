@@ -49,17 +49,25 @@ class TransactionAdmin(admin.ModelAdmin):
     list_display = (
         'txhash',
         'status',
+        'accepted',
         'contract_name',
         'function',
-        'sender',
-        'args',
-        'updated_at'
+        'updated_at',
     )
     search_fields = (
         'txhash',
+        'sender__address',
+        'sender__owner__name',
+        'sender__owner__contact_name',
+        'sender__owner__email',
+        'sender__owner__contact_email',
     )
     list_filter = (
+        'sender__blockchain',
+        'created_at',
+        'updated_at',
         'status',
+        'accepted',
         'contract_name',
         'function',
     )
