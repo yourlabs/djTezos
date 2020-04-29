@@ -140,7 +140,20 @@ class Provider(BaseProvider):
             origination = tx.inject()
             return origination['hash']
         except RpcError as e:
+            """
+            Error example on check transfer failing :
+            e.args[0] = {'kind': 'temporary',
+                         'id': 'proto.006-PsCARTHA.michelson_v1.script_rejected',
+                         'location': 336,
+                         'with': {'string': 'Country restriction failed.'}
+                         }
+            """
             if not len(e.args) or not isinstance(e.args[0], dict):
+                raise
+            if 'id' in e.args[0]:
+                error_id = e.args[0]['id']
+                if 'script_rejected' in error_id and 'checkTransfer' in tx.view():
+                    raise ValidationError(dict(e.args[0]))
                 raise
             if 'msg' not in e.args[0]:
                 raise
