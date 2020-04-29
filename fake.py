@@ -19,6 +19,9 @@ from .provider import BaseProvider
 logger = logging.getLogger('djblockchain.tezos')
 
 
+SLEEP = int(os.getenv('FAKEBC_SLEEP', '0'))
+
+
 class Provider(BaseProvider):
     def create_wallet(self, passphrase):
         return '0x4cf2425EF2D798D17e2ecB37' + str(random.randint(
@@ -44,9 +47,11 @@ class Provider(BaseProvider):
              contract_address,
              function_name,
              *args):
+        time.sleep(SLEEP)
         return uuid4()
 
     def watch(self, transaction, spool=True, postdeploy_kwargs=None):
+        time.sleep(SLEEP)
         transaction.contract_address = '0x123123123123123123123123' + str(random.randint(
             1000000000000000, 9999999999999999
         ))
