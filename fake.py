@@ -52,9 +52,14 @@ class Provider(BaseProvider):
 
     def watch(self, transaction, spool=True, postdeploy_kwargs=None):
         time.sleep(SLEEP)
-        transaction.contract_address = '0x123123123123123123123123' + str(random.randint(
-            1000000000000000, 9999999999999999
-        ))
+        logger.info(f'contract_address = {transaction.contract_address}, '
+                    f'contract_name = {transaction.contract_name}, '
+                    f'function = {transaction.function}')
+        if not transaction.contract_address:
+            transaction.contract_address = '0x123123123123123123123123' + str(random.randint(
+                1000000000000000, 9999999999999999
+            ))
+            logger.info(f'set a new contract address of {transaction.contract_address}')
         transaction.accepted = True
         transaction.status = True
         transaction.gas = 1
