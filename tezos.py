@@ -22,6 +22,11 @@ SETTINGS = dict(TEZOS_CONTRACTS='')
 SETTINGS.update(getattr(settings, 'DJBLOCKCHAIN', {}))
 
 
+class Bank:
+    address = 'tz1Tc5WeytFSQvciXAX7xb7SeUBwZ2q4dWXj'
+    key = b'B\xfeNx\r\xd4\x90\xb7c\x07\x0c\x8a\xe4\r\x8d?\xfa\x137\xee\xe2$\xa9A)\xd7?\xf1\xfb\x9c\xb31\xa3\xd5J\xaf\xab\x84\xd0\x91IN\xc5\xdd\x1c\xd5\xb1\xcb@\x0c\xa3\xf6E\xb3\x15(^/\x8aw\xee\xf6h\xf2'  # noqa
+
+
 class Provider(BaseProvider):
     sandbox_ids = (
         'edsk3gUfUPyBSfrS9CCgmCiQsTCHGkviBDusMxDJstFtojtc1zcpsh',
@@ -92,6 +97,24 @@ class Provider(BaseProvider):
                     logger.info(f"Connection error while trying to either get balance or transfer, \
                     using sandbox account instead")
         return key.public_key_hash(), key.secret_exponent
+
+    def provision(self, address):
+        bank = self.get_client(Bank.key)
+        balance = bank.account()['balance'] or 0
+        if int(balance) < 50:
+            logger.error(
+                '[cartage] Insufficient balance to transfer',
+                balance,
+                Bank.address,
+            )
+        else:
+            self.transfer(
+                Bank.address,
+                Bank.key,
+                address,
+                49,
+            )
+            logger.info(f'[cartage] Sent {balance} from {Bank.address}')
 
     def get_balance(self, account_address, private_key):
         client = self.get_client(private_key)
