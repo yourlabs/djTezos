@@ -101,7 +101,7 @@ class Provider(BaseProvider):
     def provision(self, address):
         bank = self.get_client(Bank.key)
         balance = bank.account()['balance'] or 0
-        if int(balance) < 50:
+        if int(balance) < 50_000_000:
             logger.error(
                 '[cartage] Insufficient balance to transfer',
                 balance,
@@ -112,7 +112,7 @@ class Provider(BaseProvider):
                 Bank.address,
                 Bank.key,
                 address,
-                49,
+                49_000_000,
             )
             logger.info(f'[cartage] Sent {balance} from {Bank.address}')
 
