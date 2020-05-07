@@ -101,7 +101,25 @@ signals.pre_save.connect(account_wallet, sender=Account)
 
 def user_wallets(sender, instance, **kwargs):
     for blockchain in Blockchain.objects.all():
-        Account.objects.get_or_create(owner=instance, blockchain=blockchain)
+        account, created = Account.objects.get_or_create(
+            owner=instance, blockchain=blockchain)
+
+        if not created:
+            continue
+
+        if not instance.is_company:
+            # provision only companies
+            continue
+
+        if 'carthagenet' not in blockchain.endpoint:
+            # provision only on carthagenet
+            continue
+
+        if blockchain.id != instance.blockchain_id:
+            # provision only companies that are on carthagenet
+            continue
+
+        instance.blockchain.provider.provision(account.address)
 signals.post_save.connect(user_wallets, sender=get_user_model())
 
 
