@@ -81,24 +81,25 @@ class Provider(BaseProvider):
             # during tests, use sandbox accounts to avoid having to make time-eating transfers
             if 'DJBLOCKCHAIN_MOCK' in os.environ and os.environ['DJBLOCKCHAIN_MOCK']:
                 key = self.get_sandbox_account()
-            else:
-                # pick the sandbox account with the most tezies and transfer to the new account
-                DEFAULT_TZLOCAL_TEZIES = 1_200_000_000
-                try:
-                    richest_sandbox = self.get_richest_sandbox_account()
-                    self.transfer(
-                        richest_sandbox.public_key_hash(),
-                        richest_sandbox.secret_exponent,
-                        key.public_key_hash(),
-                        DEFAULT_TZLOCAL_TEZIES
-                    )
-                except ConnectionError as e:
-                    key = self.get_sandbox_account()
-                    logger.info(f"Connection error while trying to either get balance or transfer, \
-                    using sandbox account instead")
         return key.public_key_hash(), key.secret_exponent
 
-    def provision(self, address):
+    def _provision_tzlocal(self, address):
+        if 'DJBLOCKCHAIN_MOCK' in os.environ and os.environ['DJBLOCKCHAIN_MOCK']:
+            pass
+        # pick the sandbox account with the most tezies and transfer to the new account
+        DEFAULT_TZLOCAL_TEZIES = 1_200_000_000
+        try:
+            richest_sandbox = self.get_richest_sandbox_account()
+            self.transfer(
+                richest_sandbox.public_key_hash(),
+                richest_sandbox.secret_exponent,
+                address,
+                DEFAULT_TZLOCAL_TEZIES
+            )
+        except ConnectionError as e:
+            logger.info(f"Connection error while trying to either get balance or transfer tezies to {address}")
+
+    def _provision_carthagenet(self, address):
         bank = self.get_client(Bank.key)
         balance = bank.account()['balance'] or 0
         if int(balance) < 50:
@@ -116,6 +117,12 @@ class Provider(BaseProvider):
             )
             logger.info(
                 f'[cartage] {Bank.address} sent 49tz remains: {balance}')
+
+    def provision(self, address):
+        if self.blockchain.name == 'tezos carthagenet':
+            self._provision_carthagenet(address)
+        elif self.blockchain.name == 'tzlocal':
+            self._provision_tzlocal(address)
 
     def get_balance(self, account_address, private_key):
         client = self.get_client(private_key)

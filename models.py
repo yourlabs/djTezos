@@ -111,12 +111,12 @@ def user_wallets(sender, instance, **kwargs):
             # provision only companies
             continue
 
-        if 'carthagenet' not in blockchain.endpoint:
-            # provision only on carthagenet
+        if 'carthagenet' not in blockchain.endpoint and 'tzlocal' not in blockchain.name:
+            # provision only on carthagenet or tzlocal
             continue
 
         if blockchain.id != instance.blockchain_id:
-            # provision only companies that are on carthagenet
+            # provision only companies that are on carthagenet or tzlocal
             continue
 
         instance.blockchain.provider.provision(account.address)
