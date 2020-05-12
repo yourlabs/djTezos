@@ -4,7 +4,6 @@ import logging
 import time
 import os
 
-from djcall.models import Caller
 from django.conf import settings
 from pytezos import Contract, Key, pytezos
 from mnemonic import Mnemonic
@@ -315,20 +314,7 @@ class Provider(BaseProvider):
         raise StopIteration
 
 
-    def watch(self, transaction, spool=True, postdeploy_kwargs=None):
-        if transaction.status:
-            return True
-        if spool:
-            return Caller(
-                callback='djblockchain.tezos.transaction_watch',
-                kwargs=dict(
-                    pk=transaction.pk,
-                    module=type(transaction).__module__,
-                    cls=type(transaction).__name__,
-                    postdeploy_kwargs=postdeploy_kwargs,
-                ),
-            ).spool('blockchain')
-
+    def watch(self, transaction):
         client = pytezos.using(shell=self.blockchain.endpoint)
         opg = None
         i = 300
@@ -360,21 +346,3 @@ class Provider(BaseProvider):
         result = opg['contents'][0]['metadata']['operation_result']
         if 'originated_contracts' in result:
             transaction.contract_address = result['originated_contracts'][0]
-        transaction.accepted = True
-        transaction.status = True
-        transaction.save()
-        logger.info(f'{sign}: success')
-        logger.debug(f'{sign}.postdeploy(): start')
-        transaction.refresh_from_db()
-        transaction.postdeploy(**(postdeploy_kwargs or dict()))
-        logger.info(f'{sign}.postdeploy(): success')
-
-
-def transaction_watch(**kwargs):
-    module = importlib.import_module(kwargs['module'])
-    cls = getattr(module, kwargs['cls'])
-    transaction = cls.objects.get(pk=kwargs['pk'])
-    transaction.watch(
-        spool=False,
-        postdeploy_kwargs=kwargs.get('postdeploy_kwargs', dict())
-    )

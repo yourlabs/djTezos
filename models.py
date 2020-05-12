@@ -1,3 +1,4 @@
+import datetime
 import importlib
 import random
 import string
@@ -13,11 +14,17 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.postgres.fields import JSONField
 from django.db import models
+from django.db import close_old_connections
 from django.db.models import signals
+from django.utils.translation import gettext_lazy as _
 
 from cryptography.hazmat.primitives.ciphers import (
     Cipher, algorithms, modes)
 from cryptography.hazmat.backends import default_backend
+
+from djcall.models import Caller
+
+from model_utils.managers import InheritanceManager
 
 logger = logging.getLogger('djblockchain')
 
@@ -26,6 +33,9 @@ SETTINGS = dict(
     PROVIDERS=(
         ('djblockchain.ethereum.Provider', 'Ethereum'),
         ('djblockchain.tezos.Provider', 'Tezos'),
+        ('djblockchain.fake.Provider', 'Test'),
+        ('djblockchain.fake.FailDeploy', 'Test that fails deploy'),
+        ('djblockchain.fake.FailWatch', 'Test that fails watch'),
     )
 )
 SETTINGS.update(getattr(settings, 'DJBLOCKCHAIN', {}))
@@ -82,6 +92,53 @@ class Account(models.Model):
     def private_key(self):
         return decrypt(self.crypted_key) if self.crypted_key else None
 
+    @property
+    def to_spool(self):
+        """Return transactions pending for action"""
+        return self.transactions_sent.exclude(
+            state__in=('held', 'done'),
+        ).order_by('created_at').select_subclasses()
+
+    @property
+    def caller(self):
+        if '_djcall_caller' not in self.__dict__:
+            # get existing sender for this sender or create a new one
+            self._djcall_caller = Caller.objects.get_or_create(
+                callback='djblockchain.models.sender_queue',
+                kwargs=dict(pk=str(self.pk)),
+            )[0]
+        return self._djcall_caller
+
+    def spool(self, force=False):
+        if not force and self.caller.running:
+            return
+        self.caller.spool('blockchain')
+
+
+def sender_queue(pk):
+    acc = Account.objects.filter(pk=pk).first()
+    if not acc:
+        logger.error(f'{pk} does not exist anymore')
+        return
+
+    tx = acc.to_spool.first()
+
+    if not tx:
+        logger.info(f'Account {pk} has no pending transaction')
+        return
+
+    if tx.state in ('deploy', 'deploying'):
+        tx.deploy_state()
+
+    elif tx.state in ('watch', 'watching'):
+        tx.watch_state()
+
+    elif tx.state in ('postdeploy', 'postdeploying'):
+        tx.postdeploy_state()
+
+    # restart myself until I shut down by myself because my work is done
+    acc.spool(force=True)
+
 
 def account_wallet(sender, instance, **kwargs):
     if instance.crypted_key or not instance.owner:
@@ -107,7 +164,8 @@ def user_wallets(sender, instance, **kwargs):
         if not created:
             continue
 
-        if not instance.is_company:
+        # equisafe only, to remove
+        if not getattr(instance, 'is_company', None):
             # provision only companies
             continue
 
@@ -138,6 +196,7 @@ class Blockchain(models.Model):
     provider_class = models.CharField(
         max_length=255,
         choices=SETTINGS['PROVIDERS'],
+        default='djblockchain.fake.Provider',
     )
     confirmation_blocks = models.IntegerField(default=0)
     description = models.TextField(blank=True)
@@ -204,16 +263,6 @@ class Transaction(models.Model):
         null=True,
         blank=True,
     )
-    accepted = models.BooleanField(
-        help_text='Has this transaction been accepted by the blockchain',
-        default=None,
-        null=True,
-    )
-    status = models.BooleanField(
-        help_text='Has this transaction been accepted by the blockchain',
-        default=False,
-        db_index=True,
-    )
     gasprice = models.BigIntegerField(blank=True, null=True)
     gas = models.BigIntegerField(blank=True, null=True)
     contract_address = models.CharField(max_length=255, null=True)
@@ -227,7 +276,27 @@ class Transaction(models.Model):
     )
     function = models.CharField(max_length=100, null=True, blank=True)
     args = JSONField(null=True, default=list)
-    hold = models.BooleanField(default=False)
+
+    STATE_CHOICES = (
+        ('held', _('Held')),
+        ('deploy', _('To deploy')),
+        ('deploying', _('Deploying')),
+        ('watch', _('To watch')),
+        ('watching', _('Watching')),
+        ('postdeploy', _('To post-deploy')),
+        ('postdeploying', _('Post-deploying')),
+        ('done', _('Finished')),
+    )
+    state = models.CharField(
+        choices=STATE_CHOICES,
+        default='held',
+        max_length=200,
+    )
+    error = models.TextField(blank=True)
+    history = JSONField(default=list)
+    states = [i[0] for i in STATE_CHOICES]
+
+    objects = InheritanceManager()
 
     @property
     def blockchain(self):
@@ -241,12 +310,13 @@ class Transaction(models.Model):
     def provider(self):
         return self.sender.blockchain.provider
 
-    def watch(self, spool=True, postdeploy_kwargs=None):
-        self.sender.blockchain.provider.watch(
-            self,
-            spool=spool,
-            postdeploy_kwargs=postdeploy_kwargs or dict(),
-        )
+    def save(self, *args, **kwargs):
+        if self.state not in self.states:
+            raise Exception('Invalid state', self.state)
+        result = super().save(*args, **kwargs)
+        if self.sender_id:
+            self.sender.spool()
+        return result
 
     def call(self, **kwargs):
         return Transaction.objects.create(
@@ -254,30 +324,54 @@ class Transaction(models.Model):
             **kwargs
         )
 
-    def save(self, *args, **kwargs):
-        result = None
-        if not self.hold and not self.txhash:
-            if uwsgi:
-                # WIP: ideally, we would only lock based on the tx sender address
-                logger.debug(
-                    f'\nsetting lock for tx {self.id} = {self} contract {self.contract} fn {self.function}\n')
-                # uwsgi.lock(1)
-                uwsgi.sharedarea_wlock(0)
-            try:
-                self.txhash = self.deploy()
-            finally:
-                if uwsgi:
-                    logger.debug(f'\nunlocking for tx = {self.id} = {self} contract {self.contract} fn {self.function}\n')
-                    uwsgi.sharedarea_unlock(0)
-                    # uwsgi.unlock(1)
-        result = super().save(*args, **kwargs)
-        if self.txhash and not self.accepted:
-            self.watch()
-        return result
+    def deploy_state(self):
+        self.state_set('deploying')
+        try:
+            self.txhash = self.deploy()
+        except Exception as e:
+            self.error = str(e)
+            self.save()
+        else:
+            self.state_set('watch')
 
+    def watch_state(self):
+        self.state_set('watching')
+        try:
+            self.watch()
+        except Exception as e:
+            self.error = str(e)
+            self.save()
+        else:
+            self.state_set('postdeploy')
+
+    def watch(self):
+        self.sender.blockchain.provider.watch(self)
+
+    def postdeploy_state(self):
+        self.state_set('postdeploying')
+        try:
+            self.postdeploy()
+        except Exception as e:
+            self.error = str(e)
+            self.save()
+        else:
+            self.state_set('done')
 
     def postdeploy(self):
         pass
+
+    def state_set(self, state):
+        self.state = state
+        self.history.append([
+            self.state,
+            int(datetime.datetime.now().strftime('%s')),
+        ])
+        self.save()
+        logger.info(f'Tx({self}).state set to {self.state}')
+        # ensure commit happens, is it really necessary ?
+        # not sure why not
+        # django.db.connection.close()
+        # close_old_connections()
 
     def deploy(self):
         if self.contract_id:

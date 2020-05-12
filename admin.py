@@ -57,17 +57,22 @@ class TransactionAdmin(admin.ModelAdmin):
     def receiver_name(self, obj):
         return obj.receiver.owner if obj.receiver_id else ""
 
+    def no_error(self, obj):
+        return obj.error is not None
+
+    no_error.boolean = True
+
     list_display = (
         'sender_name',
         'sender',
         'receiver_name',
         'receiver',
         'txhash',
-        'status',
         'blockchain',
-        'accepted',
         'contract_name',
         'function',
+        'state',
+        'no_error',
         'updated_at',
     )
     search_fields = (
@@ -80,10 +85,10 @@ class TransactionAdmin(admin.ModelAdmin):
     )
     list_filter = (
         'sender__blockchain',
+        'state',
         'created_at',
         'updated_at',
-        'status',
-        'accepted',
+        'state',
         'contract_name',
         'function',
     )
@@ -97,8 +102,7 @@ class TransactionAdmin(admin.ModelAdmin):
         'id',
         'created_at',
         'updated_at',
-        'status',
-        'accepted',
+        'state',
         'sender',
         'receiver',
         'blockchain',
@@ -111,7 +115,6 @@ class TransactionAdmin(admin.ModelAdmin):
         'contract',
         'function',
         'args',
-        'hold',
         'explorer_link',
     )
 

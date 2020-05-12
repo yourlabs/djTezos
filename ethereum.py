@@ -8,7 +8,6 @@ import time
 from web3 import Web3
 import web3.exceptions
 
-from djcall.models import Caller
 from django.conf import settings
 from rest_framework.exceptions import ValidationError
 from tenacity import retry, stop_after_attempt, wait_fixed
@@ -104,74 +103,24 @@ class Provider(BaseProvider):
 
     @retry(wait=wait_fixed(2), reraise=True, stop=stop_after_attempt(7))
     def write_transaction(self, sender, private_key, tx):
-        SET_GAS_LIMIT = False
-        GAS_MULTIPLIER = 2
-        try:
-            from .models import Transaction
-            # check out lock(1) usage in djblockchain, allows use to safely use nonce_db
-            # filter out if txhash == '' ?
-            nonce_db = Transaction.objects.filter(sender__address=sender).count()
-            nonce = self.client.eth.getTransactionCount(sender)
-            logger.info(f'from {sender}, gettxcount nonce = {nonce} / nonce_db = {nonce_db}')
-            options = {
-                'from': sender,
-                'nonce': nonce_db,
-            }
-            # https://docs.kaleido.io/faqs/why-am-i-getting-transaction-out-of-gas-errors/
-            if SET_GAS_LIMIT and self.blockchain.name != 'ethlocal':
-                # gas_estimate = self.client.eth.estimateGas(tx)
-                try:
-                    # deploy transaction estimate
-                    gas_estimate = tx.estimateGas()
-                    options['gas'] = min(10000000, gas_estimate * GAS_MULTIPLIER)
-                    logger.info(f'gasestimate = {options["gas"]}')
-                except ValueError:
-                    # send transaction estimate
-                    options['gas'] = self.client.eth.estimateGas(tx.buildTransaction(options))
-                    logger.info(f'gasestimate = {options["gas"]}')
+        nonce = self.client.eth.getTransactionCount(sender)
+        options = {
+            'from': sender,
+            'nonce': nonce,
+        }
+        options['gas'] = self.client.eth.estimateGas(tx.buildTransaction(options))
+        built = tx.buildTransaction(options)
+        signed_txn = self.client.eth.account.sign_transaction(
+            built,
+            private_key=private_key
+        )
 
-            try:
-                built = tx.buildTransaction(options)
-            except ValueError as exc:
-                if 'code' in exc.args[0] and exc.args[0]['code'] == -32000 and 'gas required exceeds allowance' in exc.args[0]['message']:
-                    # force set gas https://github.com/ethers-io/ethers.js/issues/469#issuecomment-475926538
-                    options['gas'] = 20_000_000
-                    options['gas'] = self.client.eth.estimateGas(tx.buildTransaction(options))
-                    logger.info(f'requiring = {options["gas"]} of gas')
-                    built = tx.buildTransaction(options)
-                else:
-                    raise
-
-            signed_txn = self.client.eth.account.sign_transaction(
-                built,
-                private_key=private_key
-            )
-            self.client.eth.sendRawTransaction(signed_txn.rawTransaction)
-        except ValueError as exc:
-            if not len(exc.args) or not isinstance(exc.args[0], dict):
-                raise
-            if 'message' not in exc.args[0]:
-                raise
-            raise ValidationError(exc.args[0]['message'])
-
+        self.client.eth.sendRawTransaction(signed_txn.rawTransaction)
         return self.client.toHex(
             self.client.keccak(signed_txn.rawTransaction)
         )
 
-    def watch(self, transaction, spool=True, postdeploy_kwargs=None):
-        if transaction.status:
-            return True
-        if spool:
-            return Caller(
-                callback='djblockchain.ethereum.transaction_watch',
-                kwargs=dict(
-                    pk=transaction.pk,
-                    module=type(transaction).__module__,
-                    cls=type(transaction).__name__,
-                    postdeploy_kwargs=postdeploy_kwargs,
-                ),
-            ).spool('blockchain')
-
+    def watch(self, transaction):
         func = transaction.function or 'deploy'
         sign = (
             f'{transaction.contract_name}.{func}(*{transaction.args})'
@@ -201,14 +150,6 @@ class Provider(BaseProvider):
         )[0]
         if receipt.contractAddress:
             transaction.contract_address = receipt.contractAddress
-        transaction.accepted = True
-        transaction.status = receipt.status
-        transaction.save()
-        logger.info(f'{sign}: {receipt.status}')
-        logger.debug(f'{sign}.postdeploy(): start')
-        transaction.refresh_from_db()
-        transaction.postdeploy(**(postdeploy_kwargs or dict()))
-        logger.info(f'{sign}.postdeploy(): success')
 
     def call(self, contract_name, contract_address, function, *args):
         # supported by ethereum only
@@ -275,13 +216,3 @@ class Provider(BaseProvider):
             else:
                 output[out['name']] = result[i]
         return output
-
-
-def transaction_watch(**kwargs):
-    module = importlib.import_module(kwargs['module'])
-    cls = getattr(module, kwargs['cls'])
-    transaction = cls.objects.get(pk=kwargs['pk'])
-    transaction.watch(
-        spool=False,
-        postdeploy_kwargs=kwargs.get('postdeploy_kwargs', dict())
-    )

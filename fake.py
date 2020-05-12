@@ -1,45 +1,36 @@
-from uuid import uuid4
-import importlib
-import json
 import logging
 import random
 import time
 import os
 
-from djcall.models import Caller
-from django.conf import settings
-from pytezos import Contract, Key, pytezos
-from tenacity import retry, stop_after_attempt
-from rest_framework.exceptions import ValidationError
-from pytezos.rpc.node import RpcError
-
-from .models import Account
 from .provider import BaseProvider
 
 logger = logging.getLogger('djblockchain.tezos')
 
 
-SLEEP = int(os.getenv('FAKEBC_SLEEP', '0'))
+SLEEP = float(os.getenv('FAKEBC_SLEEP', '0.1'))
+
+
+def fakehash(leet):
+    return f'0x{leet}5EF2D798D17e2ecB37' + str(random.randint(
+        1000000000000000, 9999999999999999
+    ))
 
 
 class Provider(BaseProvider):
     def create_wallet(self, passphrase):
-        return '0x4cf2425EF2D798D17e2ecB37' + str(random.randint(
-            1000000000000000, 9999999999999999
-        )), b'_\xf2\x7f\xf6\xfd\xadu:\n\xe3Y\xc3a\xd2\x92\x97o3F\x86\xf5[\x9d\x10\x9d{S\x87zh\xde\xc1'
-
-        '''
-    def get_client(self, private_key):
-        return None
-        '''
+        return (
+            fakehash('w41137'),
+            b'_\xf2\x7f\xf6\xfd\xadu:\n\xe3Y\xc3a\xd2\x92\x97o3F\x86\xf5[\x9d\x10\x9d{S\x87zh\xde\xc1'  # noqa
+        )
 
     def get_balance(self, account_address, private_key):
         return 1234
 
     def deploy(self, sender, private_key, contract_name, *args):
-        return uuid4()
+        time.sleep(SLEEP)
+        return fakehash('d3pl0y3d7xh4sH')
 
-    @retry(reraise=True, stop=stop_after_attempt(30))
     def send(self,
              sender,
              private_key,
@@ -48,21 +39,22 @@ class Provider(BaseProvider):
              function_name,
              *args):
         time.sleep(SLEEP)
-        return uuid4()
+        return fakehash('s3n77xh4sH')
 
-    def watch(self, transaction, spool=True, postdeploy_kwargs=None):
+    def watch(self, transaction):
         time.sleep(SLEEP)
-        logger.info(f'contract_address = {transaction.contract_address}, '
-                    f'contract_name = {transaction.contract_name}, '
-                    f'function = {transaction.function}')
         if not transaction.contract_address:
-            transaction.contract_address = '0x123123123123123123123123' + str(random.randint(
-                1000000000000000, 9999999999999999
-            ))
-            logger.info(f'set a new contract address of {transaction.contract_address}')
-        transaction.accepted = True
-        transaction.status = True
-        transaction.gas = 1
-        transaction.save()
-        transaction.refresh_from_db()
-        transaction.postdeploy(**(postdeploy_kwargs or dict()))
+            transaction.contract_address = fakehash('c0n7r4c7')
+        transaction.gas = 1337
+
+
+class FailDeploy(Provider):
+    def deploy(self, sender, private_key, contract_name, *args):
+        time.sleep(SLEEP)
+        raise Exception('Deploy failed as requested')
+
+
+class FailWatch(Provider):
+    def watch(self, transaction):
+        time.sleep(SLEEP)
+        raise Exception('Watch failed as requested')

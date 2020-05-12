@@ -71,4 +71,7 @@ class TransactionViewSet(viewsets.ReadOnlyModelViewSet):
         if txhash is not None:
             qs = qs.filter(txhash=txhash)
 
+        if 'sender_only' in self.request.query_params:
+            qs = qs.filter(sender__owner=self.request.role.entity_represented)
+
         return qs
