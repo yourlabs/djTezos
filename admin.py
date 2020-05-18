@@ -21,6 +21,9 @@ class AccountAdmin(admin.ModelAdmin):
         'owner__email',
         'address',
     )
+    raw_id_fields = (
+        'owner',
+    )
 
 admin.site.register(Account, AccountAdmin)
 admin.site.register(Block)
@@ -44,11 +47,14 @@ class BlockchainAdmin(admin.ModelAdmin):
 
 admin.site.register(Blockchain, BlockchainAdmin)
 
-
+#transaction.sender.blockchain
 class TransactionAdmin(admin.ModelAdmin):
     list_display = (
+        'sender',
+        'receiver',
         'txhash',
         'status',
+        'blockchain',
         'accepted',
         'contract_name',
         'function',
@@ -72,5 +78,31 @@ class TransactionAdmin(admin.ModelAdmin):
         'function',
     )
     ordering = ['-updated_at']
+    raw_id_fields = (
+        'sender',
+        'receiver',
+        'contract',
+    )
+    readonly_fields = (
+        'id',
+        'created_at',
+        'updated_at',
+        'status',
+        'accepted',
+        'sender',
+        'receiver',
+        'blockchain',
+        'txhash',
+        'block',
+        'gasprice',
+        'gas',
+        'contract_address',
+        'contract_name',
+        'contract',
+        'function',
+        'args',
+        'hold',
+        'explorer_link',
+    )
 
 admin.site.register(Transaction, TransactionAdmin)
