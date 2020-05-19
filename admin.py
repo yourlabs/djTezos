@@ -47,10 +47,23 @@ class BlockchainAdmin(admin.ModelAdmin):
 
 admin.site.register(Blockchain, BlockchainAdmin)
 
-#transaction.sender.blockchain
 class TransactionAdmin(admin.ModelAdmin):
+    def sender_name(self, obj):
+        try:
+            obj.sender.owner
+            return obj.sender.owner
+        except:
+            return 'No sender found'
+    def receiver_name(self, obj):
+        try:
+            obj.receiver.owner
+            return obj.receiver.owner
+        except:
+            return 'No receiver found'
     list_display = (
+        'sender_name',
         'sender',
+        'receiver_name',
         'receiver',
         'txhash',
         'status',
