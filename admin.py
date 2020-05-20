@@ -25,6 +25,7 @@ class AccountAdmin(admin.ModelAdmin):
         'owner',
     )
 
+
 admin.site.register(Account, AccountAdmin)
 admin.site.register(Block)
 
@@ -45,20 +46,25 @@ class BlockchainAdmin(admin.ModelAdmin):
         'is_active',
     )
 
+
 admin.site.register(Blockchain, BlockchainAdmin)
+
 
 class TransactionAdmin(admin.ModelAdmin):
     def sender_name(self, obj):
         try:
             obj.sender.owner
             return obj.sender.owner
-        except:
+
+        except AttributeError:
             return 'No sender found'
+
     def receiver_name(self, obj):
         try:
             obj.receiver.owner
             return obj.receiver.owner
-        except:
+
+        except AttributeError:
             return 'No receiver found'
     list_display = (
         'sender_name',
@@ -117,5 +123,6 @@ class TransactionAdmin(admin.ModelAdmin):
         'hold',
         'explorer_link',
     )
+
 
 admin.site.register(Transaction, TransactionAdmin)
