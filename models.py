@@ -155,9 +155,10 @@ class Blockchain(models.Model):
         return getattr(mod, parts[-1])(self)
 
 
-def blockchain_wallets(sender, instance, **kwargs):
-    for user in get_user_model().objects.all():
-        Account.objects.get_or_create(owner=user, blockchain=instance)
+def blockchain_wallets(sender, instance, created, **kwargs):
+    if created:
+        for user in get_user_model().objects.all():
+            Account.objects.get_or_create(owner=user, blockchain=instance)
 signals.post_save.connect(blockchain_wallets, sender=Blockchain)
 
 
