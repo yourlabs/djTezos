@@ -52,20 +52,11 @@ admin.site.register(Blockchain, BlockchainAdmin)
 
 class TransactionAdmin(admin.ModelAdmin):
     def sender_name(self, obj):
-        try:
-            obj.sender.owner
-            return obj.sender.owner
-
-        except AttributeError:
-            return 'No sender found'
+        return obj.sender.owner if obj.sender_id else ""
 
     def receiver_name(self, obj):
-        try:
-            obj.receiver.owner
-            return obj.receiver.owner
+        return obj.receiver.owner if obj.receiver_id else ""
 
-        except AttributeError:
-            return 'No receiver found'
     list_display = (
         'sender_name',
         'sender',
