@@ -61,7 +61,7 @@ class TransactionViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
 
-        qs.filter(
+        qs = qs.filter(
             Q(sender__owner=self.request.role.entity_represented)
             | Q(receiver__owner=self.request.role.entity_represented),
         )
