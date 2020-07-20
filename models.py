@@ -300,7 +300,8 @@ class Transaction(models.Model):
 
     @property
     def blockchain(self):
-        return self.sender.blockchain
+        if self.sender:
+            return self.sender.blockchain
 
     @property
     def explorer_link(self):

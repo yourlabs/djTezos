@@ -63,11 +63,11 @@ class TransactionAdmin(admin.ModelAdmin):
     no_error.boolean = True
 
     list_display = (
+        'txhash',
         'sender_name',
         'sender',
         'receiver_name',
         'receiver',
-        'txhash',
         'blockchain',
         'contract_name',
         'function',
