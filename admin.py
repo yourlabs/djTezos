@@ -58,7 +58,7 @@ class TransactionAdmin(admin.ModelAdmin):
         return obj.receiver.owner if obj.receiver_id else ""
 
     def no_error(self, obj):
-        return obj.error is not None
+        return not obj.error
 
     no_error.boolean = True
 
