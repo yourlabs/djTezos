@@ -291,6 +291,7 @@ class Transaction(models.Model):
         choices=STATE_CHOICES,
         default='held',
         max_length=200,
+        db_index=True,
     )
     error = models.TextField(blank=True)
     history = JSONField(default=list)
