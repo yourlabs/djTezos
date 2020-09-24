@@ -316,7 +316,7 @@ class Transaction(models.Model):
         if self.state not in self.states:
             raise Exception('Invalid state', self.state)
         result = super().save(*args, **kwargs)
-        if self.sender_id:
+        if self.sender_id and not self.error:
             self.sender.spool()
         return result
 
@@ -331,6 +331,8 @@ class Transaction(models.Model):
         try:
             self.txhash = self.deploy()
         except Exception as e:
+            # todo: attempt a certain amount
+            # self.state_set('error')
             self.error = str(e)
             self.save()
         else:
