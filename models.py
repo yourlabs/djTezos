@@ -127,6 +127,10 @@ def sender_queue(pk):
         logger.info(f'Account {pk} has no pending transaction')
         return
 
+    if tx.error:
+        logger.info(f'Transaction {tx} has an error, aborting')
+        return
+
     if tx.state in ('deploy', 'deploying'):
         tx.deploy_state()
 
