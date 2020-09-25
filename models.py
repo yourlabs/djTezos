@@ -316,7 +316,9 @@ class Transaction(models.Model):
         if self.state not in self.states:
             raise Exception('Invalid state', self.state)
         result = super().save(*args, **kwargs)
-        if self.sender_id and not self.error:
+        if self.error:
+            raise Exception('Error', self.error)
+        if self.sender_id:
             self.sender.spool()
         return result
 
