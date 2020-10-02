@@ -63,6 +63,7 @@ class TransactionAdmin(admin.ModelAdmin):
     no_error.boolean = True
 
     list_display = (
+        'id',
         'txhash',
         'sender_name',
         'sender',
@@ -76,6 +77,7 @@ class TransactionAdmin(admin.ModelAdmin):
         'updated_at',
     )
     search_fields = (
+        'id',
         'txhash',
         'sender__address',
         'sender__owner__name',
