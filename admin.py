@@ -24,7 +24,18 @@ class AccountAdmin(admin.ModelAdmin):
     raw_id_fields = (
         'owner',
     )
+    readonly_fields = ('balance',)
 
+    def balance(self, obj):
+        balance = None
+        try:
+            balance = obj.blockchain.provider.get_balance(
+                obj.address,
+                obj.private_key,
+            )
+            return balance
+        except Exception as e:
+            return None
 
 admin.site.register(Account, AccountAdmin)
 admin.site.register(Block)
