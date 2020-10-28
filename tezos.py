@@ -138,7 +138,7 @@ class Provider(BaseProvider):
             try:
                 operation = client.reveal().autofill().sign().inject()
             except RpcError as e:
-                if 'previously_revealed_key' in e.args[0]['id']:
+                if 'id' in e.args[0] and 'previously_revealed_key' in e.args[0]['id']:
                     return client
                 raise e
             else:
