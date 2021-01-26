@@ -1,0 +1,22 @@
+image: yourlabs/python
+
+test:
+  image: yourlabs/python
+  services:
+  - name: postgres:latest
+  variables:
+    POSTGRES_HOST: postgres
+    POSTGRES_DB: djblockchain
+    POSTGRES_USER: djblockchain
+    POSTGRES_PASSWORD: djblockchain
+  script:
+  - apk update && apk add uwsgi uwsgi-python3 uwsgi-http uwsgi-spooler
+  - pip install -e .[test]
+  - DJANGO_SETTINGS_MODULE=djblockchain.test_settings py.test -sv
+
+deploy:
+  stage: deploy
+  script: pypi-release
+  only:
+    refs:
+    - master
