@@ -12,7 +12,6 @@ except ImportError:
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.postgres.fields import JSONField
 from django.db import models
 from django.db import close_old_connections
 from django.db.models import signals
@@ -279,7 +278,7 @@ class Transaction(models.Model):
         related_name='call_set',
     )
     function = models.CharField(max_length=100, null=True, blank=True)
-    args = JSONField(null=True, default=list)
+    args = models.JSONField(null=True, default=list)
 
     STATE_CHOICES = (
         ('held', _('Held')),
@@ -298,7 +297,7 @@ class Transaction(models.Model):
         db_index=True,
     )
     error = models.TextField(blank=True)
-    history = JSONField(default=list)
+    history = models.JSONField(default=list)
     states = [i[0] for i in STATE_CHOICES]
 
     objects = InheritanceManager()
