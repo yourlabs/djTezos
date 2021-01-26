@@ -11,9 +11,10 @@ import tempfile
 import textwrap
 import time
 
+from django.apps import apps
 from django.conf import settings
 
-from eqs.models import Entity
+User = apps.get_model(settings.AUTH_USER_MODEL)
 
 from .models import Account, Blockchain, Transaction
 
@@ -31,7 +32,7 @@ def bc():
 
 @pytest.fixture
 def acc(bc):
-    return Entity.objects.create().account_set.filter(blockchain=bc).first()
+    return User.objects.create().account_set.filter(blockchain=bc).first()
 
 
 @pytest.mark.django_db
