@@ -26,7 +26,7 @@ class AccountViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         return super().get_queryset().filter(
-            owner=self.request.role.entity_represented
+            owner=self.request.user
         )
 
     @action(detail=True, methods=['get'])  # noqa: C901
@@ -62,8 +62,8 @@ class TransactionViewSet(viewsets.ReadOnlyModelViewSet):
         qs = super().get_queryset()
 
         qs = qs.filter(
-            Q(sender__owner=self.request.role.entity_represented)
-            | Q(receiver__owner=self.request.role.entity_represented),
+            Q(sender__owner=self.request.user)
+            | Q(receiver__owner=self.request.user),
         )
 
         txhash = self.request.query_params.get('txhash', None)
@@ -72,6 +72,6 @@ class TransactionViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(txhash=txhash)
 
         if 'sender_only' in self.request.query_params:
-            qs = qs.filter(sender__owner=self.request.role.entity_represented)
+            qs = qs.filter(sender__owner=self.request.user)
 
         return qs
