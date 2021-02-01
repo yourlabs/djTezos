@@ -113,6 +113,9 @@ class Account(models.Model):
             return
         self.caller.spool('blockchain')
 
+    def get_balance(self):
+        return self.provider.get_balance(self.address, self.private_key)
+
 
 def sender_queue(pk):
     acc = Account.objects.filter(pk=pk).first()
