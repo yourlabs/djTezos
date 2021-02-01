@@ -9,6 +9,7 @@ setup(
         'django-model-utils',
         'cryptography',
         'djcall',
+        'tenacity',
     ],
     extras_require=dict(
         test=[
