@@ -12,7 +12,6 @@ except ImportError:
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.postgres.fields import JSONField
 from django.db import models
 from django.db import close_old_connections
 from django.db.models import signals
@@ -114,6 +113,9 @@ class Account(models.Model):
             return
         self.caller.spool('blockchain')
 
+    def get_balance(self):
+        return self.provider.get_balance(self.address, self.private_key)
+
 
 def sender_queue(pk):
     acc = Account.objects.filter(pk=pk).first()
@@ -182,7 +184,7 @@ def user_wallets(sender, instance, **kwargs):
             continue
 
         instance.blockchain.provider.provision(account.address)
-signals.post_save.connect(user_wallets, sender=get_user_model())
+#signals.post_save.connect(user_wallets, sender=get_user_model())
 
 
 class Block(models.Model):
@@ -222,7 +224,7 @@ def blockchain_wallets(sender, instance, created, **kwargs):
     if created:
         for user in get_user_model().objects.all():
             Account.objects.get_or_create(owner=user, blockchain=instance)
-signals.post_save.connect(blockchain_wallets, sender=Blockchain)
+#signals.post_save.connect(blockchain_wallets, sender=Blockchain)
 
 
 class Transaction(models.Model):
@@ -279,7 +281,7 @@ class Transaction(models.Model):
         related_name='call_set',
     )
     function = models.CharField(max_length=100, null=True, blank=True)
-    args = JSONField(null=True, default=list)
+    args = models.JSONField(null=True, default=list)
 
     STATE_CHOICES = (
         ('held', _('Held')),
@@ -298,7 +300,7 @@ class Transaction(models.Model):
         db_index=True,
     )
     error = models.TextField(blank=True)
-    history = JSONField(default=list)
+    history = models.JSONField(default=list)
     states = [i[0] for i in STATE_CHOICES]
 
     objects = InheritanceManager()
