@@ -184,7 +184,7 @@ def user_wallets(sender, instance, **kwargs):
             continue
 
         instance.blockchain.provider.provision(account.address)
-signals.post_save.connect(user_wallets, sender=get_user_model())
+#signals.post_save.connect(user_wallets, sender=get_user_model())
 
 
 class Block(models.Model):
@@ -224,7 +224,7 @@ def blockchain_wallets(sender, instance, created, **kwargs):
     if created:
         for user in get_user_model().objects.all():
             Account.objects.get_or_create(owner=user, blockchain=instance)
-signals.post_save.connect(blockchain_wallets, sender=Blockchain)
+#signals.post_save.connect(blockchain_wallets, sender=Blockchain)
 
 
 class Transaction(models.Model):

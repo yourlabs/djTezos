@@ -32,7 +32,7 @@ def bc():
 
 @pytest.fixture
 def acc(bc):
-    return User.objects.create().account_set.filter(blockchain=bc).first()
+    return User.objects.create().account_set.get_or_create(blockchain=bc)[0]
 
 
 @pytest.mark.django_db
@@ -123,15 +123,14 @@ async def user(name):
         user = user.json()
         user['accounts'] = dict()
 
-        accounts = await client.get('http://localhost:7999/account/')
-        assert accounts.status_code == 200, accounts.content
-        for account in accounts.json():
-            if account['owner'] != user['url']:
-                continue
-            bc = await client.get(account['blockchain'])
-            assert bc.status_code == 200, bc.content
-            bc = bc.json()
-            user['accounts'][bc['name']] = account
+        blockchains = await client.get('http://localhost:7999/blockchain/')
+        assert blockchains.status_code == 200, blockchains.content
+        for bc in blockchains.json():
+            acc = await client.post('http://localhost:7999/account/', data=dict(
+                owner=user['url'],
+                blockchain=bc['url'],
+            ))
+            user['accounts'][bc['name']] = acc.json()
         return user
 
 
