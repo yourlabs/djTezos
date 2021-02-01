@@ -19,4 +19,4 @@ deploy:
   script: pypi-release
   only:
     refs:
-    - master
+    - tags
