@@ -25,8 +25,6 @@ class BlockchainSerializer(serializers.HyperlinkedModelSerializer):
         )
 
 class AccountSerializer(serializers.HyperlinkedModelSerializer):
-    blockchain = BlockchainSerializer(required=False)
-
     class Meta:
         model = Account
         fields = (
@@ -37,7 +35,6 @@ class AccountSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class TransactionSerializer(serializers.ModelSerializer):
-    blockchain = BlockchainSerializer(required=False)
     class Meta:
         model = Transaction
         fields = (
