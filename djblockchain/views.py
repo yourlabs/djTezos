@@ -61,17 +61,7 @@ class TransactionViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
 
-        qs = qs.filter(
-            Q(sender__owner=self.request.user)
-            | Q(receiver__owner=self.request.user),
-        )
-
-        txhash = self.request.query_params.get('txhash', None)
-
-        if txhash is not None:
-            qs = qs.filter(txhash=txhash)
-
-        if 'sender_only' in self.request.query_params:
-            qs = qs.filter(sender__owner=self.request.user)
+        if not self.request.user.is_superuser:
+            qs = qs.for_user(self.request.user)
 
         return qs

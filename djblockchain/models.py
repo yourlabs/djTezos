@@ -14,7 +14,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.db import close_old_connections
-from django.db.models import signals
+from django.db.models import Q, signals
 from django.utils.translation import gettext_lazy as _
 
 from cryptography.hazmat.primitives.ciphers import (
@@ -23,7 +23,10 @@ from cryptography.hazmat.backends import default_backend
 
 from djcall.models import Caller
 
-from model_utils.managers import InheritanceManager
+from model_utils.managers import (
+    InheritanceManagerMixin,
+    InheritanceQuerySetMixin,
+)
 
 logger = logging.getLogger('djblockchain')
 
@@ -227,6 +230,18 @@ def blockchain_wallets(sender, instance, created, **kwargs):
 #signals.post_save.connect(blockchain_wallets, sender=Blockchain)
 
 
+class TransactionQuerySet(InheritanceQuerySetMixin, models.QuerySet):
+    def for_user(self, user):
+        return self.filter(
+            Q(sender__owner=user) | Q(receiver__owner=user),
+        ).distinct()
+
+
+class TransactionManager(InheritanceManagerMixin, models.Manager):
+    def get_queryset(self):
+        return TransactionQuerySet(self.model)
+
+
 class Transaction(models.Model):
     id = models.UUIDField(
         primary_key=True,
@@ -303,7 +318,7 @@ class Transaction(models.Model):
     history = models.JSONField(default=list)
     states = [i[0] for i in STATE_CHOICES]
 
-    objects = InheritanceManager()
+    objects = TransactionManager()
 
     @property
     def blockchain(self):
