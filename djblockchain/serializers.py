@@ -35,6 +35,8 @@ class AccountSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class TransactionSerializer(serializers.ModelSerializer):
+    blockchain = BlockchainSerializer()
+
     class Meta:
         model = Transaction
         fields = (
@@ -52,4 +54,24 @@ class TransactionSerializer(serializers.ModelSerializer):
             'args',
             'error',
             'blockchain',
+            'sender',
+        )
+
+
+class TransactionCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Transaction
+        fields = (
+            'state',
+            'contract_name',
+            'function',
+            'args',
+        )
+
+
+class TransactionUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Transaction
+        fields = (
+            'state',
         )

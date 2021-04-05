@@ -16,6 +16,8 @@ from .serializers import (
     AccountSerializer,
     BlockchainSerializer,
     TransactionSerializer,
+    TransactionCreateSerializer,
+    TransactionUpdateSerializer,
 )
 
 
@@ -53,10 +55,16 @@ class BlockchainViewSet(viewsets.ReadOnlyModelViewSet):
         return qs.filter(is_active=True)
 
 
-class TransactionViewSet(viewsets.ReadOnlyModelViewSet):
+class TransactionViewSet(viewsets.ModelViewSet):
     queryset = Transaction.objects.all()
-    serializer_class = TransactionSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return TransactionCreateSerializer
+        if self.action in ('partial_update', 'update'):
+            return TransactionUpdateSerializer
+        return TransactionSerializer
 
     def get_queryset(self):
         qs = super().get_queryset()
