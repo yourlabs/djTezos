@@ -46,7 +46,7 @@ class AccountViewSet(viewsets.ReadOnlyModelViewSet):
             raise http.Http404
 
 class BlockchainViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Blockchain.objects.all()
+    queryset = Blockchain.objects.filter(is_active=True)
     serializer_class = BlockchainSerializer
     permission_classes = [IsAuthenticated]
 
