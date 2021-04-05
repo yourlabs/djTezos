@@ -320,6 +320,9 @@ class Transaction(models.Model):
 
     objects = TransactionManager()
 
+    def __str__(self):
+        return self.txhash or self.contract_name or str(self.pk)
+
     @property
     def blockchain(self):
         if self.sender:
