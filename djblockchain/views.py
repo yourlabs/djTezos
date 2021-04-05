@@ -55,6 +55,14 @@ class BlockchainViewSet(viewsets.ReadOnlyModelViewSet):
 class TransactionViewSet(viewsets.ModelViewSet):
     queryset = Transaction.objects.all()
     permission_classes = [IsAuthenticated]
+    search_fields = [
+        'txhash',
+        'contract_name',
+        'contract_address',
+        'blockchain__name',
+        'sender__address',
+        'receiver__address',
+    ]
 
     def get_serializer_class(self):
         if self.action == 'create':
