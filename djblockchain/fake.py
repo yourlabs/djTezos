@@ -27,7 +27,7 @@ class Provider(BaseProvider):
     def get_balance(self, account_address, private_key):
         return 1234
 
-    def deploy(self, sender, private_key, contract_name, *args):
+    def deploy(self, sender, private_key, contract_name, *args, code=None):
         time.sleep(SLEEP)
         return fakehash('d3pl0y3d7xh4sH')
 

@@ -180,17 +180,17 @@ class Provider(BaseProvider):
         return opg
 
     @retry(reraise=True, stop=stop_after_attempt(30))
-    def deploy(self, sender, private_key, contract_name, *args):
+    def deploy(self, sender, private_key, contract_name, *args, code=None):
         logger.debug(f'{contract_name}.deploy({args}): start')
         client = self.get_client(private_key, reveal=True, sender=sender)
 
         if not client.balance():
             raise ValidationError(f'{sender} needs more than 0 tezies')
 
-        tx = dict(
-            code=self.get_contract_code(contract_name),
-            storage=args[0]
-        )
+        if not code:
+            code = self.get_contract_code(contract_name)
+
+        tx = dict(code=code, storage=args[0])
         tx = client.origination(tx).autofill().sign()
         result = self.write_transaction(sender, private_key, tx)
         logger.info(f'{contract_name}.deploy({args}): {result}')
