@@ -33,7 +33,6 @@ class AccountSerializer(serializers.HyperlinkedModelSerializer):
             'url',
             'address',
             'blockchain',
-            'owner',
         )
 
 
