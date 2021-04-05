@@ -155,6 +155,13 @@ class Provider(BaseProvider):
             contract_name + '.json'
         )
 
+    def get_contract_code(self, contract_name):
+        return json.loads(
+            open(
+                self.get_contract_path(contract_name)
+            ).read()
+        )
+
     def wait_injection(self, client, operation):
         opg = None
         tries = 100
@@ -181,11 +188,7 @@ class Provider(BaseProvider):
             raise ValidationError(f'{sender} needs more than 0 tezies')
 
         tx = dict(
-            code=json.loads(
-                open(
-                    self.get_contract_path(contract_name)
-                ).read()
-            ),
+            code=self.get_contract_code(contract_name),
             storage=args[0]
         )
         tx = client.origination(tx).autofill().sign()
