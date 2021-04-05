@@ -45,14 +45,11 @@ class AccountViewSet(viewsets.ReadOnlyModelViewSet):
         except Account.DoesNotExist:
             raise http.Http404
 
+
 class BlockchainViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Blockchain.objects.filter(is_active=True)
     serializer_class = BlockchainSerializer
     permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        qs = super().get_queryset()
-        return qs.filter(is_active=True)
 
 
 class TransactionViewSet(viewsets.ModelViewSet):
