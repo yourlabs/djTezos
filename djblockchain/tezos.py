@@ -208,6 +208,7 @@ class Provider(BaseProvider):
             origination = tx.inject()
             return origination['hash']
         except RpcError as e:
+            logger.exception('RpcError')
             """
             Error example on check transfer failing :
             e.args[0] = {'kind': 'temporary',
