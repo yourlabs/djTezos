@@ -1,7 +1,7 @@
 image: yourlabs/python
 
 test:
-  image: yourlabs/python
+  image: yourlabs/python-arch
   services:
   - name: postgres:latest
   variables:
@@ -10,7 +10,7 @@ test:
     POSTGRES_USER: djblockchain
     POSTGRES_PASSWORD: djblockchain
   script:
-  - apk update && apk add uwsgi uwsgi-python3 uwsgi-http uwsgi-spooler
+  - pacman --noconfirm -S uwsgi uwsgi-plugin-python
   - pip install -e .[test]
   - DJANGO_SETTINGS_MODULE=djblockchain.test_settings py.test -sv
 
