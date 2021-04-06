@@ -16,6 +16,8 @@ from .serializers import (
     AccountSerializer,
     BlockchainSerializer,
     TransactionSerializer,
+    TransactionCreateSerializer,
+    TransactionUpdateSerializer,
 )
 
 
@@ -43,35 +45,36 @@ class AccountViewSet(viewsets.ReadOnlyModelViewSet):
         except Account.DoesNotExist:
             raise http.Http404
 
+
 class BlockchainViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Blockchain.objects.all()
+    queryset = Blockchain.objects.filter(is_active=True)
     serializer_class = BlockchainSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        qs = super().get_queryset()
-        return qs.filter(is_active=True)
 
-
-class TransactionViewSet(viewsets.ReadOnlyModelViewSet):
+class TransactionViewSet(viewsets.ModelViewSet):
     queryset = Transaction.objects.all()
-    serializer_class = TransactionSerializer
     permission_classes = [IsAuthenticated]
+    search_fields = [
+        'txhash',
+        'contract_name',
+        'contract_address',
+        'blockchain__name',
+        'sender__address',
+        'receiver__address',
+    ]
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return TransactionCreateSerializer
+        if self.action in ('partial_update', 'update'):
+            return TransactionUpdateSerializer
+        return TransactionSerializer
 
     def get_queryset(self):
         qs = super().get_queryset()
 
-        qs = qs.filter(
-            Q(sender__owner=self.request.user)
-            | Q(receiver__owner=self.request.user),
-        )
-
-        txhash = self.request.query_params.get('txhash', None)
-
-        if txhash is not None:
-            qs = qs.filter(txhash=txhash)
-
-        if 'sender_only' in self.request.query_params:
-            qs = qs.filter(sender__owner=self.request.user)
+        if not self.request.user.is_superuser:
+            qs = qs.for_user(self.request.user)
 
         return qs
