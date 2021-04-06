@@ -334,10 +334,8 @@ class Transaction(models.Model):
         try:
             self.txhash = self.deploy()
         except Exception as e:
-            tt, value, tb = sys.exc_info()
-            self.error = '\n'.join(
-                traceback.format_exception(tt, value, tb))
-            print(self.error)
+            logger.exception('Transaction deploy exception')
+            self.error = str(e)
             self.save()
         else:
             self.state_set('watch')
@@ -347,6 +345,7 @@ class Transaction(models.Model):
         try:
             self.watch()
         except Exception as e:
+            logger.exception('Transaction watch exception')
             self.error = str(e)
             self.save()
         else:
@@ -360,6 +359,7 @@ class Transaction(models.Model):
         try:
             self.postdeploy()
         except Exception as e:
+            logger.exception('Transaction postdeploy exception')
             self.error = str(e)
             self.save()
         else:
