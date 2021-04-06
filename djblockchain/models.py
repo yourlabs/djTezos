@@ -167,14 +167,6 @@ def account_wallet(sender, instance, **kwargs):
 signals.pre_save.connect(account_wallet, sender=Account)
 
 
-class Block(models.Model):
-    blockchain = models.ForeignKey(
-        'Blockchain',
-        on_delete=models.CASCADE,
-    )
-    number = models.PositiveIntegerField()
-
-
 class Blockchain(models.Model):
     name = models.CharField(max_length=100)
     endpoint = models.CharField(max_length=255)
@@ -198,13 +190,6 @@ class Blockchain(models.Model):
             '.'.join(parts[:-1])
         )
         return getattr(mod, parts[-1])(self)
-
-
-def blockchain_wallets(sender, instance, created, **kwargs):
-    if created:
-        for user in get_user_model().objects.all():
-            Account.objects.get_or_create(owner=user, blockchain=instance)
-#signals.post_save.connect(blockchain_wallets, sender=Blockchain)
 
 
 class TransactionQuerySet(InheritanceQuerySetMixin, models.QuerySet):
