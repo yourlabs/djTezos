@@ -1,9 +1,11 @@
 import datetime
 import importlib
+import logging
 import random
 import string
+import sys
+import traceback
 import uuid
-import logging
 
 try:
     import uwsgi
@@ -357,9 +359,9 @@ class Transaction(models.Model):
         try:
             self.txhash = self.deploy()
         except Exception as e:
-            # todo: attempt a certain amount
-            # self.state_set('error')
-            self.error = str(e)
+            tt, value, tb = sys.exc_info()
+            self.error = '\n'.join(
+                traceback.format_exception(tt, value, tb))
             self.save()
         else:
             self.state_set('watch')
