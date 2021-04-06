@@ -362,6 +362,7 @@ class Transaction(models.Model):
             tt, value, tb = sys.exc_info()
             self.error = '\n'.join(
                 traceback.format_exception(tt, value, tb))
+            print(self.error)
             self.save()
         else:
             self.state_set('watch')
