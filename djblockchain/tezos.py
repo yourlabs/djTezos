@@ -179,7 +179,6 @@ class Provider(BaseProvider):
             time.sleep(1)
         return opg
 
-    @retry(reraise=True, stop=stop_after_attempt(30))
     def deploy(self, sender, private_key, contract_name, *args, code=None):
         logger.debug(f'{contract_name}.deploy({args}): start')
         client = self.get_client(private_key, reveal=True, sender=sender)
@@ -196,6 +195,7 @@ class Provider(BaseProvider):
         logger.info(f'{contract_name}.deploy({args}): {result}')
         return result
 
+    @retry(reraise=True, stop=stop_after_attempt(30))
     def write_transaction(self, sender, private_key, tx):
         """
         When send transaction :
@@ -204,67 +204,9 @@ class Provider(BaseProvider):
                 .address  # KT1JiMkPbwkrDzLqQsbMGmfkyiBMVjdT5Lh8
                 .amount  # 0
         """
-        try:
-            origination = tx.inject()
-            return origination['hash']
-        except RpcError as e:
-            logger.exception('RpcError')
-            """
-            Error example on check transfer failing :
-            e.args[0] = {'kind': 'temporary',
-                         'id': 'proto.006-PsCARTHA.michelson_v1.script_rejected',
-                         'location': 336,
-                         'with': {'string': 'Country restriction failed.'}
-                         }
-            """
-            tx_str = f'tx with sender = {sender}'
-            if hasattr(tx, 'address'):
-                tx_str += f' and address = {tx.address}'
-            if not len(e.args) or not isinstance(e.args[0], dict):
-                raise
-            if 'id' in e.args[0]:
-                error_id = e.args[0]['id']
-                if 'script_rejected' in error_id and 'checkTransfer' in tx.view():
-                    raise ValidationError(dict(e.args[0]))
-            if 'msg' not in e.args[0]:
-                raise
-            if 'Counter' in e.args[0]['msg']:
-                logger.info(f'{tx_str} counter error')
-                i = 3600
-                origination = None
-                counter = None
+        origination = tx.inject()
+        return origination['hash']
 
-
-                while True:
-                    try:
-                        logger.info(f"{tx_str} try #{300 - i + 1}")
-                        if counter:
-                            logger.debug(f"Counter set from {tx.contents[0]['counter']} to {counter}")
-                            tx.contents[0]['counter'] = counter
-                            tx = tx.sign()
-                        origination = tx.inject()
-                        if 'hash' in origination:
-                            logger.info(f"{tx_str} HASH = " + str(origination['hash']))
-                            break
-                    except RpcError as e:
-                        if 'expected' in e.args[0] and 'found' in e.args[0]:
-                            expected = e.args[0]['expected']
-                            found = e.args[0]['found']
-                            logger.debug(f'Counter expected = {expected} / found = {found}')
-                            counter = expected
-                        if i:
-                            time.sleep(5)
-                            # tx.shell.wait_next_block()
-                            i -= 1
-                        else:
-                            raise
-                logger.info(f"{tx_str} RETURNING HASH = " + str(origination['hash']))
-                return origination['hash']
-            else:
-                logger.info(f'{tx_str} other rpc error')
-                raise
-
-    @retry(reraise=True, stop=stop_after_attempt(30))
     def send(self,
              sender,
              private_key,
