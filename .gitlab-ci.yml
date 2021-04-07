@@ -4,15 +4,17 @@ test:
   image: yourlabs/python-arch
   services:
   - name: postgres:latest
+  - name: yourlabs/tezos
+    alias: tz
   variables:
     POSTGRES_HOST: postgres
-    POSTGRES_DB: djblockchain
-    POSTGRES_USER: djblockchain
-    POSTGRES_PASSWORD: djblockchain
+    POSTGRES_DB: djtezos
+    POSTGRES_USER: djtezos
+    POSTGRES_PASSWORD: djtezos
   script:
   - pacman --noconfirm -S uwsgi uwsgi-plugin-python
   - pip install -e .[test]
-  - DJANGO_SETTINGS_MODULE=djblockchain.test_settings py.test -sv
+  - DJANGO_SETTINGS_MODULE=djtezos.test_settings py.test -sv
 
 deploy:
   stage: deploy

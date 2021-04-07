@@ -4,7 +4,7 @@ import pytest
 import time
 
 from django.contrib.auth import get_user_model
-from djblockchain.models import Blockchain, Contract, Call, Transfer, Transaction
+from djtezos.models import Blockchain, Contract, Call, Transfer, Transaction
 
 
 User = get_user_model()
@@ -44,7 +44,7 @@ def tzlocal():
     return Blockchain.objects.create(
         name='tzlocal',
         endpoint='http://tz:8732',
-        provider_class='djblockchain.tezos.Provider',
+        provider_class='djtezos.tezos.Provider',
         is_active=True,
         confirmation_blocks=1,
     )

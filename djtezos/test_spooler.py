@@ -26,7 +26,7 @@ FAKEBC_SLEEP = int(os.getenv('FAKEBC_SLEEP', '2'))
 @pytest.fixture
 def bc():
     return Blockchain.objects.get_or_create(
-        provider_class='djblockchain.fake.Provider',
+        provider_class='djtezos.fake.Provider',
     )[0]
 
 
@@ -97,7 +97,7 @@ def uwsgi():
                 '--spooler-chdir=' + os.getcwd(),
                 '--http-socket=localhost:7999',
                 '--plugins=' + ','.join(plugins),
-                '--module=djblockchain.demo:application',
+                '--module=djtezos.demo:application',
             ],
             env,
         )

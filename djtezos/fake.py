@@ -5,7 +5,7 @@ import os
 
 from .provider import BaseProvider
 
-logger = logging.getLogger('djblockchain.tezos')
+logger = logging.getLogger('djtezos.tezos')
 
 
 SLEEP = float(os.getenv('FAKEBC_SLEEP', '0.1'))

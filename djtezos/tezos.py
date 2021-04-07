@@ -16,7 +16,7 @@ from .exceptions import PermanentError, TemporaryError
 from .models import Account
 from .provider import BaseProvider
 
-logger = logging.getLogger('djblockchain.tezos')
+logger = logging.getLogger('djtezos.tezos')
 
 SETTINGS = dict(TEZOS_CONTRACTS='')
 SETTINGS.update(getattr(settings, 'DJBLOCKCHAIN', {}))

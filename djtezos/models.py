@@ -33,16 +33,15 @@ from model_utils.managers import (
 
 from .exceptions import PermanentError, TemporaryError
 
-logger = logging.getLogger('djblockchain')
+logger = logging.getLogger('djtezos')
 
 
 SETTINGS = dict(
     PROVIDERS=(
-        ('djblockchain.ethereum.Provider', 'Ethereum'),
-        ('djblockchain.tezos.Provider', 'Tezos'),
-        ('djblockchain.fake.Provider', 'Test'),
-        ('djblockchain.fake.FailDeploy', 'Test that fails deploy'),
-        ('djblockchain.fake.FailWatch', 'Test that fails watch'),
+        ('djtezos.tezos.Provider', 'Tezos'),
+        ('djtezos.fake.Provider', 'Test'),
+        ('djtezos.fake.FailDeploy', 'Test that fails deploy'),
+        ('djtezos.fake.FailWatch', 'Test that fails watch'),
     )
 )
 SETTINGS.update(getattr(settings, 'DJBLOCKCHAIN', {}))
@@ -117,7 +116,7 @@ class Account(models.Model):
         if '_djcall_caller' not in self.__dict__:
             # get existing sender for this sender or create a new one
             self._djcall_caller = Caller.objects.get_or_create(
-                callback='djblockchain.models.sender_queue',
+                callback='djtezos.models.sender_queue',
                 kwargs=dict(pk=str(self.pk)),
             )[0]
         return self._djcall_caller
@@ -179,7 +178,7 @@ class Blockchain(models.Model):
     provider_class = models.CharField(
         max_length=255,
         choices=SETTINGS['PROVIDERS'],
-        default='djblockchain.fake.Provider',
+        default='djtezos.fake.Provider',
     )
     confirmation_blocks = models.IntegerField(default=0)
     description = models.TextField(blank=True)

@@ -2,7 +2,7 @@ from setuptools import setup
 
 
 setup(
-    name='djblockchain',
+    name='djtezos',
     versioning='dev',
     setup_requires='setupmeta',
     install_requires=[
@@ -10,6 +10,7 @@ setup(
         'cryptography',
         'djcall',
         'tenacity',
+        'pytezos',
     ],
     extras_require=dict(
         test=[

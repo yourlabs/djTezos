@@ -6,7 +6,7 @@ if not settings.configured:
     DB = dict(
         ENGINE='django.db.backends.postgresql',
         USER=os.getenv('POSTGRES_USER', os.getenv('USER')),
-        NAME=os.getenv('POSTGRES_DB', 'djblockchain_demo'),
+        NAME=os.getenv('POSTGRES_DB', 'djtezos_demo'),
         HOST=os.getenv('POSTGRES_HOST', None),
         PASSWORD=os.getenv('POSTGRES_PASSWORD', None),
     )
@@ -19,7 +19,7 @@ if not settings.configured:
             'django.contrib.auth',
             'rest_framework',
             'djcall',
-            'djblockchain',
+            'djtezos',
         ),
         TEMPLATES = [
             {
@@ -48,14 +48,14 @@ if not settings.configured:
                     'level': 'DEBUG',
                     'handlers': ['console'],
                 } for name in (
-                    'djblockchain',
+                    'djtezos',
                     'djcall',
                 )
             },
         },
         MIDDLEWARE=[],
         REST_FRAMEWORK=dict(DEFAULT_AUTHENTICATION_CLASSES=[]),
-        ROOT_URLCONF='djblockchain.demo',
+        ROOT_URLCONF='djtezos.demo',
         SECRET_KEY='nnot so secretnot so secretnot so secretnot so secretot so secret',
         STATIC_URL='/static/',
     )
@@ -65,19 +65,19 @@ if not settings.configured:
     from django.core.management import call_command
     call_command('flush', interactive=False)
     call_command('migrate')
-    from djblockchain.models import Blockchain
+    from djtezos.models import Blockchain
     Blockchain.objects.create(
-        name='fake', provider_class='djblockchain.fake.Provider'
+        name='fake', provider_class='djtezos.fake.Provider'
     )
     Blockchain.objects.create(
-        name='faildeploy', provider_class='djblockchain.fake.FailDeploy'
+        name='faildeploy', provider_class='djtezos.fake.FailDeploy'
     )
     Blockchain.objects.create(
-        name='failwatch', provider_class='djblockchain.fake.FailWatch'
+        name='failwatch', provider_class='djtezos.fake.FailWatch'
     )
 
 from django.contrib.auth.models import Group, User, Permission
-from djblockchain.models import Account, Blockchain, Transaction
+from djtezos.models import Account, Blockchain, Transaction
 
 from rest_framework import routers, serializers, viewsets
 
