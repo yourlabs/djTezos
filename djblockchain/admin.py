@@ -2,7 +2,6 @@ from django.contrib import admin
 
 from .models import (
     Account,
-    Block,
     Blockchain,
     Transaction,
 )
@@ -38,7 +37,6 @@ class AccountAdmin(admin.ModelAdmin):
             return None
 
 admin.site.register(Account, AccountAdmin)
-admin.site.register(Block)
 
 
 class BlockchainAdmin(admin.ModelAdmin):

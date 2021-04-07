@@ -27,19 +27,17 @@ class Provider(BaseProvider):
     def get_balance(self, account_address, private_key):
         return 1234
 
-    def deploy(self, sender, private_key, contract_name, *args, code=None):
+    def transfer(self, transaction):
         time.sleep(SLEEP)
         return fakehash('d3pl0y3d7xh4sH')
 
-    def send(self,
-             sender,
-             private_key,
-             contract_name,
-             contract_address,
-             function_name,
-             *args):
+    def send(self, transaction):
         time.sleep(SLEEP)
-        return fakehash('s3n77xh4sH')
+        return fakehash('d3pl0y3d7xh4sH')
+
+    def deploy(self, transaction):
+        time.sleep(SLEEP)
+        return fakehash('d3pl0y3d7xh4sH')
 
     def watch(self, transaction):
         time.sleep(SLEEP)
@@ -49,7 +47,7 @@ class Provider(BaseProvider):
 
 
 class FailDeploy(Provider):
-    def deploy(self, sender, private_key, contract_name, *args):
+    def deploy(self, transaction):
         time.sleep(SLEEP)
         raise Exception('Deploy failed as requested')
 

@@ -1,0 +1,6 @@
+v0.3.0
+
+BC Breaks
+- code must now be set on Transaction.contract_code, there is no more embedded
+  logic to read from a path, you must implement it on your own
+- ethereum provider has not been ported to v0.3.0

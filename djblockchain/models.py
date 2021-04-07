@@ -1,5 +1,6 @@
 import datetime
 import importlib
+import json
 import logging
 import random
 import string
@@ -29,6 +30,8 @@ from model_utils.managers import (
     InheritanceManagerMixin,
     InheritanceQuerySetMixin,
 )
+
+from .exceptions import PermanentError, TemporaryError
 
 logger = logging.getLogger('djblockchain')
 
@@ -100,7 +103,13 @@ class Account(models.Model):
     def to_spool(self):
         """Return transactions pending for action"""
         return self.transactions_sent.exclude(
-            state__in=('held', 'done'),
+            state__in=(
+                'held',
+                'done',
+                'deploy-aborted',
+                'watch-aborted',
+                'postdeploy-aborted',
+            ),
         ).order_by('created_at').select_subclasses()
 
     @property
@@ -132,10 +141,6 @@ def sender_queue(pk):
 
     if not tx:
         logger.info(f'Account {pk} has no pending transaction')
-        return
-
-    if tx.error:
-        logger.info(f'Transaction {tx} has an error, aborting')
         return
 
     if tx.state in ('deploy', 'deploying'):
@@ -240,16 +245,11 @@ class Transaction(models.Model):
         null=True,
         blank=True,
     )
-    block = models.ForeignKey(
-        'Block',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-    )
     gasprice = models.BigIntegerField(blank=True, null=True)
     gas = models.BigIntegerField(blank=True, null=True)
     contract_address = models.CharField(max_length=255, null=True)
     contract_name = models.CharField(max_length=100, null=True)
+    contract_code = models.TextField(null=True, blank=True)
     contract = models.ForeignKey(
         'self',
         null=True,
@@ -259,15 +259,19 @@ class Transaction(models.Model):
     )
     function = models.CharField(max_length=100, null=True, blank=True)
     args = models.JSONField(null=True, default=list)
+    amount = models.PositiveIntegerField(default=0)
 
     STATE_CHOICES = (
         ('held', _('Held')),
         ('deploy', _('To deploy')),
         ('deploying', _('Deploying')),
+        ('deploy-aborted', _('Deploy aborted')),
         ('watch', _('To watch')),
         ('watching', _('Watching')),
+        ('watch-aborted', _('Watch aborted')),
         ('postdeploy', _('To post-deploy')),
         ('postdeploying', _('Post-deploying')),
+        ('postdeploy-aborted', _('Postdeploy aborted')),
         ('done', _('Finished')),
     )
     state = models.CharField(
@@ -302,8 +306,6 @@ class Transaction(models.Model):
         if self.state not in self.states:
             raise Exception('Invalid state', self.state)
         result = super().save(*args, **kwargs)
-        if self.error:
-            raise Exception('Error', self.error)
         if self.sender_id:
             self.sender.spool()
         return result
@@ -318,10 +320,14 @@ class Transaction(models.Model):
         self.state_set('deploying')
         try:
             self.txhash = self.deploy()
-        except Exception as e:
+        except Exception as exception:
             logger.exception('Transaction deploy exception')
-            self.error = str(e)
-            self.save()
+            self.error = str(exception)
+            self.state_set(
+                'deploy-aborted'
+                if isinstance(exception, PermanentError)
+                else 'deploy'
+            )
         else:
             self.state_set('watch')
 
@@ -329,10 +335,14 @@ class Transaction(models.Model):
         self.state_set('watching')
         try:
             self.watch()
-        except Exception as e:
+        except Exception as exception:
             logger.exception('Transaction watch exception')
-            self.error = str(e)
-            self.save()
+            self.error = str(exception)
+            self.state_set(
+                'watch-aborted'
+                if isinstance(exception, PermanentError)
+                else 'watch'
+            )
         else:
             self.state_set('postdeploy')
 
@@ -343,10 +353,14 @@ class Transaction(models.Model):
         self.state_set('postdeploying')
         try:
             self.postdeploy()
-        except Exception as e:
+        except Exception as exception:
             logger.exception('Transaction postdeploy exception')
-            self.error = str(e)
-            self.save()
+            self.error = str(exception)
+            self.state_set(
+                'deploy-aborted'
+                if isinstance(exception, PermanentError)
+                else 'postdeploy'
+            )
         else:
             self.state_set('done')
 
@@ -366,24 +380,62 @@ class Transaction(models.Model):
         # django.db.connection.close()
         # close_old_connections()
 
+    @property
+    def contract_code_python(self):
+        return json.loads(self.contract_code)
+
     def deploy(self):
         if self.contract_id:
             self.contract_name = self.contract.contract_name
             self.contract_address = self.contract.contract_address
 
-        if self.function:
-            return self.provider.send(
-                self.sender.address,
-                self.sender.private_key,
-                self.contract_name,
-                self.contract_address,
-                self.function,
-                *self.args,
-            )
-        else:
-            return self.provider.deploy(
-                self.sender.address,
-                self.sender.private_key,
-                self.contract_name,
-                *self.args,
-            )
+        return self.provider.deploy(self)
+
+
+class ContractQuerySet(TransactionQuerySet):
+    def get_queryset(self):
+        return super().get_queryset().filter(function=None, amount=None)
+
+
+class ContractManager(TransactionManager):
+    def get_queryset(self):
+        return ContractQuerySet(self.model)
+
+
+class Contract(Transaction):
+    objects = ContractManager()
+
+    class Meta:
+        proxy = True
+
+
+class CallQuerySet(TransactionQuerySet):
+    def get_queryset(self):
+        return super().get_queryset().exclude(function=None)
+
+
+class CallManager(TransactionManager):
+    def get_queryset(self):
+        return CallQuerySet(self.model)
+
+
+class Call(Transaction):
+    objects = CallManager()
+
+    class Meta:
+        proxy = True
+
+
+class TransferQuerySet(TransactionQuerySet):
+    def get_queryset(self):
+        return super().get_queryset().exclude(amount=None)
+
+
+class TransferManager(TransactionManager):
+    def get_queryset(self):
+        return TransferQuerySet(self.model)
+
+
+class Transfer(Transaction):
+    class Meta:
+        proxy = True

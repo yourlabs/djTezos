@@ -12,6 +12,7 @@ from rest_framework.exceptions import ValidationError
 from pytezos.rpc.node import RpcError
 from requests.exceptions import ConnectionError
 
+from .exceptions import PermanentError, TemporaryError
 from .models import Account
 from .provider import BaseProvider
 
@@ -19,6 +20,9 @@ logger = logging.getLogger('djblockchain.tezos')
 
 SETTINGS = dict(TEZOS_CONTRACTS='')
 SETTINGS.update(getattr(settings, 'DJBLOCKCHAIN', {}))
+
+
+RETRIES = 3
 
 
 class Bank:
@@ -35,7 +39,8 @@ class Provider(BaseProvider):
         'edsk4QLrcijEffxV31gGdN2HU7UpyJjA8drFoNcmnB28n89YjPNRFm',
     )
 
-    def transfer(self, sender, private_key, to_address, value):
+    @retry(reraise=True, stop=stop_after_attempt(RETRIES))
+    def transfer(self, transaction):
         """
         rpc error if balance too low :
         RpcError ({'amount': '120000000000000000',
@@ -44,10 +49,17 @@ class Provider(BaseProvider):
               'id': 'proto.006-PsCARTHA.contract.balance_too_low',
               'kind': 'temporary'},)
         """
-        logger.debug(f'trying to transfer {value} from {sender} to {to_address}')
-        client = self.get_client(private_key, reveal=True, sender=sender)
-        tx = client.transaction(destination=to_address, amount=value).autofill().sign()
-        result = self.write_transaction(sender, private_key, tx)
+        logger.debug(f'Transfering {transaction.amount} from {transaction.sender} to {transaction.receiver}')
+        client = self.get_client(
+            transaction.sender.private_key,
+            reveal=True,
+            sender=transaction.sender.address
+        )
+        tx = client.transaction(
+            destination=transaction.receiver.address,
+            amount=transaction.amount,
+        ).autofill().sign()
+        result = self.write_transaction(tx, transaction)
         return result
 
     def get_sandbox_account(self):
@@ -126,7 +138,7 @@ class Provider(BaseProvider):
     def get_balance(self, account_address, private_key):
         client = self.get_client(private_key)
         balance = client.account()['balance']
-        return balance
+        return int(balance)
 
     def get_client(self, private_key, reveal=False, sender=None):
         client = pytezos.using(
@@ -149,19 +161,6 @@ class Provider(BaseProvider):
 
         return client
 
-    def get_contract_path(self, contract_name):
-        return os.path.join(
-            SETTINGS['TEZOS_CONTRACTS'],
-            contract_name + '.json'
-        )
-
-    def get_contract_code(self, contract_name):
-        return json.loads(
-            open(
-                self.get_contract_path(contract_name)
-            ).read()
-        )
-
     def wait_injection(self, client, operation):
         opg = None
         tries = 100
@@ -179,49 +178,66 @@ class Provider(BaseProvider):
             time.sleep(1)
         return opg
 
-    def deploy(self, sender, private_key, contract_name, *args, code=None):
-        logger.debug(f'{contract_name}.deploy({args}): start')
-        client = self.get_client(private_key, reveal=True, sender=sender)
+    @retry(reraise=True, stop=stop_after_attempt(RETRIES))
+    def deploy(self, transaction):
+        try:
+            if transaction.amount:
+                return self.transfer(transaction)
+            elif transaction.function:
+                return self.send(transaction)
+            else:
+                return self.originate(transaction)
+        except RpcError as rpc_error:
+            if rpc_error.args[0]['kind'] == 'temporary':
+                raise TemporaryError(*rpc_error.args)
+            elif rpc_error.args[0]['kind'] == 'permanent':
+                raise PermanentError(*rpc_error.args)
+            raise
+
+
+    def originate(self, transaction):
+        logger.debug(f'{transaction}.originate({transaction.args}): start')
+        client = self.get_client(
+            transaction.sender.private_key,
+            reveal=True,
+            sender=transaction.sender.address
+        )
 
         if not client.balance():
-            raise ValidationError(f'{sender} needs more than 0 tezies')
+            raise ValidationError(
+                f'{transaction.sender.address} needs more than 0 tezies')
 
-        if not code:
-            code = self.get_contract_code(contract_name)
+        tx = client.origination(dict(
+            code=transaction.contract_code_python,
+            storage=transaction.args,
+        )).autofill().sign()
 
-        tx = dict(code=code, storage=args[0])
-        tx = client.origination(tx).autofill().sign()
-        result = self.write_transaction(sender, private_key, tx)
-        logger.info(f'{contract_name}.deploy({args}): {result}')
+        result = self.write_transaction(tx, transaction)
+
+        logger.info(f'{transaction.contract_name}.deploy({transaction.args}): {result}')
         return result
 
-    @retry(reraise=True, stop=stop_after_attempt(30))
-    def write_transaction(self, sender, private_key, tx):
-        """
-        When send transaction :
-        tx =    .key  # tz1ddb9NMYHZi5UzPdzTZMYQQZoMub195zgv
-                .shell  # http://localhost:8732 ()
-                .address  # KT1JiMkPbwkrDzLqQsbMGmfkyiBMVjdT5Lh8
-                .amount  # 0
-        """
-        origination = tx.inject()
+    def write_transaction(self, tx, transaction):
+        origination = tx.inject(
+            _async=False,
+            # this seems not to be working for us, systematic TimeoutError
+            #min_confirmations=transaction.blockchain.confirmation_blocks,
+        )
         return origination['hash']
 
-    def send(self,
-             sender,
-             private_key,
-             contract_name,
-             contract_address,
-             function_name,
-             *args):
-        logger.debug(f'{contract_name}.{function_name}({args}): start')
-        client = self.get_client(private_key)
-        logger.debug(f'{contract_name}.{function_name}({args}): counter = {client.account()["counter"]}')
-        ci = client.contract(contract_address)
-        method = getattr(ci, function_name)
-        tx = method(*args)
-        result = self.write_transaction(sender, private_key, tx)
-        logger.debug(f'{contract_name}.{function_name}({args}): {result}')
+    @retry(reraise=True, stop=stop_after_attempt(RETRIES))
+    def send(self, transaction):
+        logger.debug(f'{transaction}({transaction.args}): get_client')
+        client = self.get_client(transaction.sender.private_key)
+        logger.debug(f'{transaction}({transaction.args}): counter = {client.account()["counter"]}')
+        ci = client.contract(transaction.contract_address)
+        method = getattr(ci, transaction.function)
+        try:
+            tx = method(*transaction.args)
+        except ValueError as e:
+            raise PermanentError(*e.args)
+        result = self.write_transaction(tx, transaction)
+        logger.debug(f'{transaction}({transaction.args}): {result}')
         return result
 
     def find_in_past_blocks(self, client, transaction):
@@ -259,36 +275,35 @@ class Provider(BaseProvider):
                     raise StopIteration
         raise StopIteration
 
-
     def watch(self, transaction):
-        client = pytezos.using(shell=self.blockchain.endpoint)
-        opg = None
-        i = 300
-        while True:
-            try:
-                # level of the chain latest block
-                level_position = client.shell.head.metadata()['level']['level_position']
-                opg = self.find_in_past_blocks(client, transaction)
-                # level_operation = opg['contents'][0]['level']  (not always present)
-                operation_block_id = opg['branch']
-                level_operation = client.shell.blocks[operation_block_id].level()
-                if level_position - level_operation >= self.blockchain.confirmation_blocks:
-                    logger.info(f'block was found at a depth of : {level_position - level_operation}')
-                    break
-            except:
-                if i:
-                    # client.shell.wait_next_block() (might be a better alternative to wait for blocks to append)
-                    time.sleep(2)
-                    i -= 1
-                else:
-                    raise
+        logger.debug(f'{transaction}: watch begin')
 
-        func = transaction.function or 'deploy'
-        sign = (
-            f'{transaction.contract_name}.{func}(*{transaction.args})'
-        )
-        logger.debug(f'{sign}: watch')
-        transaction.gas = opg['contents'][0]['fee']
+        client = pytezos.using(shell=self.blockchain.endpoint)
+        current_level = client.shell.head.metadata()['level']['level_position']
+
+        while True:
+            # try to find the operation by iterating over ranges of 20 blocks
+            current_level = 0 if current_level < 0 else current_level
+            blocks = client.shell.blocks[current_level - 20:current_level]
+
+            try:
+                opg = blocks.find_operation(transaction.txhash)
+                break
+            except StopIteration:
+                current_level -= 20
+
+            if current_level == 0:
+                raise PermanentError(f'Did not find operation {transaction.txhash}')
+
+        level_operation = client.shell.blocks[opg['branch']].level()
+        offset = client.shell.head.metadata()['level']['level_position'] - level_operation
+        if offset < self.blockchain.confirmation_blocks:
+            logger.info(f'{transaction} watch: not enough confirmation blocks')
+            raise TemporaryError('Not enough confirmation blocks')
+
         result = opg['contents'][0]['metadata']['operation_result']
+        transaction.gas = opg['contents'][0]['fee']
         if 'originated_contracts' in result:
             transaction.contract_address = result['originated_contracts'][0]
+
+        logger.info(f'{transaction}: watch success')
