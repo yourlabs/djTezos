@@ -260,7 +260,7 @@ class Provider(BaseProvider):
                 current_level -= 20
 
             if start_level - current_level >= max_depth:
-                raise PermanentError(f'Did not find operation {transaction.txhash}')
+                raise TemporaryError(f'Did not find operation {transaction.txhash}')
 
         level_operation = client.shell.blocks[opg['branch']].level()
         offset = client.shell.head.metadata()['level']['level_position'] - level_operation
