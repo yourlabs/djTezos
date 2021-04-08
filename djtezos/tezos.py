@@ -240,51 +240,18 @@ class Provider(BaseProvider):
         logger.debug(f'{transaction}({transaction.args}): {result}')
         return result
 
-    def find_in_past_blocks(self, client, transaction):
-        # find operation in a greater range of past blocks
-        # we get a RPC error when executing .find_operation() on a range of length > 20
-        # here is client.shell.blocks documentation :
-
-        # Lists known heads of the blockchain sorted with decreasing fitness.
-        # Optional arguments allows to returns the list of predecessors for known heads
-        # or the list of predecessors for a given list of blocks.
-        # :param length: The requested number of predecessors to returns (per requested head).
-        # :param head: An empty argument requests blocks from the current heads.
-        # A non empty list allow to request specific fragment of the chain.
-        # :param min_date: When `min_date` is provided, heads with a timestamp before `min_date` are filtered out
-        # :return: list[list[str]]
-        #
-        # []
-        # Construct block query or get a block range.
-        # :param block_id: Block identity or block range
-        # int: Block level or offset from the head if negative;
-        # str: Block hash (base58) or special names (head, genesis), expressions like `head~1` etc;
-        # slice [:]: First value (start) must be int, second (stop) can be any Block ID or empty.
-        # :return: BlockQuery or BlockSliceQuery
-
-        BLOCK_DEPTH = 500
-        level = client.shell.head.level() - int(self.blockchain.confirmation_blocks)
-        min_level = max(level - BLOCK_DEPTH, 0)
-        while level >= min_level:
-            try:
-                opg = client.shell.blocks[max(level - 20, 0):level].find_operation(transaction.txhash)
-                return opg
-            except StopIteration:
-                level -= 20
-                if level < min_level:
-                    raise StopIteration
-        raise StopIteration
-
     def watch(self, transaction):
         logger.debug(f'{transaction}: watch begin')
 
         client = pytezos.using(shell=self.blockchain.endpoint)
-        current_level = client.shell.head.metadata()['level']['level_position']
+        start_level = current_level = client.shell.head.metadata()['level']['level_position']
+        max_depth = 500  # max number of blocks to search backwards for
 
         while True:
             # try to find the operation by iterating over ranges of 20 blocks
             current_level = 0 if current_level < 0 else current_level
             blocks = client.shell.blocks[current_level - 20:current_level]
+            logger.debug(f'{transaction}: searching backward {current_level-20}:{current_level}')
 
             try:
                 opg = blocks.find_operation(transaction.txhash)
@@ -292,12 +259,12 @@ class Provider(BaseProvider):
             except StopIteration:
                 current_level -= 20
 
-            if current_level == 0:
+            if start_level - current_level >= max_depth:
                 raise PermanentError(f'Did not find operation {transaction.txhash}')
 
         level_operation = client.shell.blocks[opg['branch']].level()
         offset = client.shell.head.metadata()['level']['level_position'] - level_operation
-        if offset < self.blockchain.confirmation_blocks:
+        if self.blockchain.confirmation_blocks and offset < self.blockchain.confirmation_blocks:
             logger.info(f'{transaction} watch: not enough confirmation blocks')
             raise TemporaryError('Not enough confirmation blocks')
 
