@@ -15,6 +15,7 @@ except ImportError:
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db import close_old_connections
 from django.db.models import Q, signals
@@ -301,6 +302,20 @@ class Transaction(models.Model):
     def provider(self):
         return self.sender.blockchain.provider
 
+    def clean(self):
+        if (
+            not self.amount
+            and not self.function
+            and not self.contract_code
+        ):
+            raise ValidationError('Requires amount, function or code')
+
+        if self.contract_id and not self.contract_name:
+            self.contract_name = self.contract.contract_name
+
+        if self.contract_id and not self.contract_address:
+            self.contract_address = self.contract.contract_address
+
     def save(self, *args, **kwargs):
         if self.state not in self.states:
             raise Exception('Invalid state', self.state)
@@ -393,10 +408,6 @@ class Transaction(models.Model):
         return json.loads(self.contract_code)
 
     def deploy(self):
-        if self.contract_id:
-            self.contract_name = self.contract.contract_name
-            self.contract_address = self.contract.contract_address
-
         return self.provider.deploy(self)
 
 
