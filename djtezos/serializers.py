@@ -50,7 +50,7 @@ class TransactionSerializer(serializers.ModelSerializer):
             'gas',
             'contract_address',
             'contract_name',
-            'contract_code',
+            'contract_micheline',
             'function',
             'args',
             'error',
@@ -65,7 +65,7 @@ class TransactionCreateSerializer(serializers.ModelSerializer):
         fields = (
             'state',
             'contract_name',
-            'contract_code',
+            'contract_micheline',
             'function',
             'args',
         )

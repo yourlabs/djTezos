@@ -56,7 +56,7 @@ def test_story(user, tzlocal):
 
     contract = Transaction.objects.create(
         sender=account,
-        contract_code=mich,
+        contract_micheline=mich,
         contract_name='test',
         args={'int': '1'},
         state='deploy',
@@ -103,7 +103,7 @@ def test_wrong_storage(user, tzlocal):
 
     contract = Transaction.objects.create(
         sender=account,
-        contract_code=mich,
+        contract_micheline=mich,
         contract_name='test',
         args={'string': 'aoeu'},
         state='deploy',
@@ -119,7 +119,7 @@ def test_wrong_args(user, tzlocal):
 
     contract = Transaction.objects.create(
         sender=account,
-        contract_code=mich,
+        contract_micheline=mich,
         contract_name='test',
         args={'int': '1'},
         state='deploy',

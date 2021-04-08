@@ -249,7 +249,8 @@ class Transaction(models.Model):
     gas = models.BigIntegerField(blank=True, null=True)
     contract_address = models.CharField(max_length=255, null=True)
     contract_name = models.CharField(max_length=100, null=True)
-    contract_code = models.TextField(null=True, blank=True)
+    contract_source = models.TextField(null=True, blank=True)
+    contract_micheline = models.JSONField(null=True, blank=True, default=list)
     contract = models.ForeignKey(
         'self',
         null=True,
@@ -306,9 +307,9 @@ class Transaction(models.Model):
         if (
             not self.amount
             and not self.function
-            and not self.contract_code
+            and not self.contract_micheline
         ):
-            raise ValidationError('Requires amount, function or code')
+            raise ValidationError('Requires amount, function or micheline')
 
         if self.contract_id and not self.contract_name:
             self.contract_name = self.contract.contract_name
@@ -402,10 +403,6 @@ class Transaction(models.Model):
         # not sure why not
         # django.db.connection.close()
         # close_old_connections()
-
-    @property
-    def contract_code_python(self):
-        return json.loads(self.contract_code)
 
     def deploy(self):
         return self.provider.deploy(self)
