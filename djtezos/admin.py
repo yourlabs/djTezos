@@ -118,7 +118,6 @@ class TransactionAdmin(admin.ModelAdmin):
         'receiver',
         'blockchain',
         'txhash',
-        'block',
         'gasprice',
         'gas',
         'contract_address',
