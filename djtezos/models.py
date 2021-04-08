@@ -320,13 +320,16 @@ class Transaction(models.Model):
         try:
             self.txhash = self.deploy()
         except Exception as exception:
-            logger.exception('Transaction deploy exception')
             self.error = str(exception)
-            self.state_set(
-                'deploy-aborted'
-                if isinstance(exception, PermanentError)
-                else 'deploy'
-            )
+            if isinstance(exception, PermanentError):
+                logger.exception(f'{self} deploy permanent error {self.error}')
+                self.state_set('deploy-aborted')
+            else:
+                if isinstance(exception, TemporaryError):
+                    logger.info(f'{self} temporary error: {self.error}')
+                else:
+                    logger.exception(f'{self} deploy exception: {self.error}')
+                self.state_set('deploy')
         else:
             self.state_set('watch')
 
@@ -335,13 +338,16 @@ class Transaction(models.Model):
         try:
             self.watch()
         except Exception as exception:
-            logger.exception('Transaction watch exception')
             self.error = str(exception)
-            self.state_set(
-                'watch-aborted'
-                if isinstance(exception, PermanentError)
-                else 'watch'
-            )
+            if isinstance(exception, PermanentError):
+                logger.exception(f'{self} watch permanent error {self.error}')
+                self.state_set('watch-aborted')
+            else:
+                if isinstance(exception, TemporaryError):
+                    logger.info(f'{self} temporary error: {self.error}')
+                else:
+                    logger.exception(f'{self} watch exception: {self.error}')
+                self.state_set('watch')
         else:
             self.state_set('postdeploy')
 
@@ -353,13 +359,16 @@ class Transaction(models.Model):
         try:
             self.postdeploy()
         except Exception as exception:
-            logger.exception('Transaction postdeploy exception')
             self.error = str(exception)
-            self.state_set(
-                'deploy-aborted'
-                if isinstance(exception, PermanentError)
-                else 'postdeploy'
-            )
+            if isinstance(exception, PermanentError):
+                logger.exception(f'{self} postdeploy permanent error {self.error}')
+                self.state_set('postdeploy-aborted')
+            else:
+                if isinstance(exception, TemporaryError):
+                    logger.info(f'{self} temporary error: {self.error}')
+                else:
+                    logger.exception(f'{self} postdeploy exception: {self.error}')
+                self.state_set('postdeploy')
         else:
             self.state_set('done')
 

@@ -30,7 +30,7 @@ tzlocal = Blockchain.objects.create(
 )
 ```
 
-Run tzlocal with: `docker run --rm --publish 8732:8732 yourlabs/tezos`
+Run tzlocal with: `docker run --name tz --rm --publish 8732:8732 yourlabs/tezos`
 
 Add to /etc/hosts: `tz` on line starting with 127.0.0.1
 
