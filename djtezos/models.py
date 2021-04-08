@@ -258,8 +258,8 @@ class Transaction(models.Model):
         related_name='call_set',
     )
     function = models.CharField(max_length=100, null=True, blank=True)
-    args = models.JSONField(null=True, default=list)
-    amount = models.PositiveIntegerField(default=0)
+    args = models.JSONField(null=True, default=list, blank=True)
+    amount = models.PositiveIntegerField(default=0, blank=True)
 
     STATE_CHOICES = (
         ('held', _('Held')),

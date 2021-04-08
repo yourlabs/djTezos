@@ -3,7 +3,10 @@ from django.contrib import admin
 from .models import (
     Account,
     Blockchain,
+    Call,
+    Contract,
     Transaction,
+    Transfer,
 )
 
 
@@ -110,23 +113,18 @@ class TransactionAdmin(admin.ModelAdmin):
         'contract',
     )
     readonly_fields = (
-        'id',
         'created_at',
         'updated_at',
-        'state',
-        'sender',
-        'receiver',
-        'blockchain',
-        'txhash',
         'gasprice',
         'gas',
-        'contract_address',
-        'contract_name',
         'contract',
-        'function',
-        'args',
         'explorer_link',
     )
 
 
 admin.site.register(Transaction, TransactionAdmin)
+
+
+admin.site.register(Contract)
+admin.site.register(Call)
+admin.site.register(Transfer)
