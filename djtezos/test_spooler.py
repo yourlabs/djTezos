@@ -37,8 +37,8 @@ def acc(bc):
 
 @pytest.mark.django_db
 def test_caller(acc):
-    tx1 = Transaction.objects.create(sender=acc, state='held')
-    tx2 = Transaction.objects.create(sender=acc, state='done')
+    tx1 = Transaction.objects.create(sender=acc, state='held', amount=1)
+    tx2 = Transaction.objects.create(sender=acc, state='done', amount=1)
     assert tx1.sender.caller == tx2.sender.caller
 
 
@@ -58,7 +58,7 @@ def test_to_spool(acc, monkeypatch):
 def test_fsm_start_finish(acc):
     for state in ('held', 'done'):
         # these states do not move
-        tx = Transaction.objects.create(sender=acc, state=state)
+        tx = Transaction.objects.create(sender=acc, state=state, amount=1)
         tx.refresh_from_db()
         assert tx.state == state
 
@@ -139,7 +139,7 @@ async def tx(user, bc='fake'):
         tx = await client.post('http://localhost:7999/transaction/', data=dict(
             sender=user['accounts'][bc]['url'],
             state='deploy',
-            contract_name='test',
+            amount=1,
         ))
         assert tx.status_code == 201, tx.content
         return tx.json()
