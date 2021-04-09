@@ -12,8 +12,7 @@ User = get_user_model()
 os.environ['DJBLOCKCHAIN_MOCK'] = '1'
 
 
-mich = '''
-[
+mich = [
   { "prim": "storage", "args": [ { "prim": "int" } ] },
   { "prim": "parameter", "args": [ { "prim": "or", "args": [ { "prim": "unit", "annots": [ "%double" ] }, { "prim": "int", "annots": [ "%replace" ] } ] } ] },
   {
@@ -31,7 +30,6 @@ mich = '''
     ]
   }
 ]
-'''
 
 
 @pytest.fixture
