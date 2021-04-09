@@ -15,6 +15,7 @@ except ImportError:
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db import close_old_connections
 from django.db.models import Q, signals
@@ -248,7 +249,8 @@ class Transaction(models.Model):
     gas = models.BigIntegerField(blank=True, null=True)
     contract_address = models.CharField(max_length=255, null=True)
     contract_name = models.CharField(max_length=100, null=True)
-    contract_code = models.TextField(null=True, blank=True)
+    contract_source = models.TextField(null=True, blank=True)
+    contract_micheline = models.JSONField(null=True, blank=True, default=list)
     contract = models.ForeignKey(
         'self',
         null=True,
@@ -257,8 +259,8 @@ class Transaction(models.Model):
         related_name='call_set',
     )
     function = models.CharField(max_length=100, null=True, blank=True)
-    args = models.JSONField(null=True, default=list)
-    amount = models.PositiveIntegerField(default=0)
+    args = models.JSONField(null=True, default=list, blank=True)
+    amount = models.PositiveIntegerField(default=0, blank=True)
 
     STATE_CHOICES = (
         ('held', _('Held')),
@@ -302,8 +304,22 @@ class Transaction(models.Model):
         return self.sender.blockchain.provider
 
     def save(self, *args, **kwargs):
+        if (
+            not self.amount
+            and not self.function
+            and not self.contract_micheline
+        ):
+            raise ValidationError('Requires amount, function or micheline')
+
+        if self.contract_id and not self.contract_name:
+            self.contract_name = self.contract.contract_name
+
+        if self.contract_id and not self.contract_address:
+            self.contract_address = self.contract.contract_address
+
         if self.state not in self.states:
             raise Exception('Invalid state', self.state)
+
         result = super().save(*args, **kwargs)
         if self.sender_id:
             self.sender.spool()
@@ -388,15 +404,7 @@ class Transaction(models.Model):
         # django.db.connection.close()
         # close_old_connections()
 
-    @property
-    def contract_code_python(self):
-        return json.loads(self.contract_code)
-
     def deploy(self):
-        if self.contract_id:
-            self.contract_name = self.contract.contract_name
-            self.contract_address = self.contract.contract_address
-
         return self.provider.deploy(self)
 
 

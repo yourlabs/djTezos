@@ -59,12 +59,12 @@ emit 3 types of Transactions.
 
 ### Deploy a smart contract
 
-Create a Transaction with a contract_code to deploy a smart contract:
+Create a Transaction with a contract_micheline to deploy a smart contract:
 
 ```python
     contract = Transaction.objects.create(
         sender=account,
-        contract_code=mich,
+        contract_micheline=mich,
         contract_name='test',
         args={'int': '1'},
         state='deploy',
@@ -104,3 +104,27 @@ Create a transfer on the blockchain:
         state='deploy',
     )
 ```
+
+## Migrate from djblockchain
+
+1. change all your imports
+2. remove migration dependencies to djblockchain to djtezos.0001_initial
+3. execute the following SQL in production
+
+```sql
+alter table djblockchain_account rename to djtezos_account;
+alter table djblockchain_blockchain rename to djtezos_blockchain;
+alter table djblockchain_transaction rename to djtezos_transaction;
+alter table djtezos_transaction drop column block_id;
+drop table djblockchain_block;
+alter table djtezos_transaction add column contract_micheline json null;
+alter table djtezos_transaction add column amount int null;
+insert into django_migrations (app, name, applied) values ('djtezos', '0001_initial', now());
+update djtezos_blockchain set provider_class = replace(provider_class, 'djblockchain', 'djtezos');
+```
+
+Then, you might still have Blockchain objects with Ethereum provider, this has
+not bee ported from djblockchain, you may deactivate them by setting
+is_active=False or you can delete them but that will cascade delete of all
+their transactions which might not be what existing users expect to happen on
+your platform...

@@ -12,8 +12,7 @@ User = get_user_model()
 os.environ['DJBLOCKCHAIN_MOCK'] = '1'
 
 
-mich = '''
-[
+mich = [
   { "prim": "storage", "args": [ { "prim": "int" } ] },
   { "prim": "parameter", "args": [ { "prim": "or", "args": [ { "prim": "unit", "annots": [ "%double" ] }, { "prim": "int", "annots": [ "%replace" ] } ] } ] },
   {
@@ -31,7 +30,6 @@ mich = '''
     ]
   }
 ]
-'''
 
 
 @pytest.fixture
@@ -56,7 +54,7 @@ def test_story(user, tzlocal):
 
     contract = Transaction.objects.create(
         sender=account,
-        contract_code=mich,
+        contract_micheline=mich,
         contract_name='test',
         args={'int': '1'},
         state='deploy',
@@ -103,7 +101,7 @@ def test_wrong_storage(user, tzlocal):
 
     contract = Transaction.objects.create(
         sender=account,
-        contract_code=mich,
+        contract_micheline=mich,
         contract_name='test',
         args={'string': 'aoeu'},
         state='deploy',
@@ -119,7 +117,7 @@ def test_wrong_args(user, tzlocal):
 
     contract = Transaction.objects.create(
         sender=account,
-        contract_code=mich,
+        contract_micheline=mich,
         contract_name='test',
         args={'int': '1'},
         state='deploy',

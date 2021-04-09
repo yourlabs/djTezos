@@ -208,7 +208,7 @@ class Provider(BaseProvider):
                 f'{transaction.sender.address} needs more than 0 tezies')
 
         tx = client.origination(dict(
-            code=transaction.contract_code_python,
+            code=transaction.contract_micheline,
             storage=transaction.args,
         )).autofill().sign()
 
