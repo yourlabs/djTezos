@@ -347,6 +347,7 @@ class Transaction(models.Model):
                     logger.exception(f'{self} deploy exception: {self.error}')
                 self.state_set('deploy')
         else:
+            self.error = ''
             self.state_set('watch')
 
     def watch_state(self):
@@ -365,6 +366,7 @@ class Transaction(models.Model):
                     logger.exception(f'{self} watch exception: {self.error}')
                 self.state_set('watch')
         else:
+            self.error = ''
             self.state_set('postdeploy')
 
     def watch(self):
@@ -386,6 +388,7 @@ class Transaction(models.Model):
                     logger.exception(f'{self} postdeploy exception: {self.error}')
                 self.state_set('postdeploy')
         else:
+            self.error = ''
             self.state_set('done')
 
     def postdeploy(self):
