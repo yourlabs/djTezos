@@ -303,7 +303,7 @@ class Transaction(models.Model):
     def provider(self):
         return self.sender.blockchain.provider
 
-    def clean(self):
+    def save(self, *args, **kwargs):
         if (
             not self.amount
             and not self.function
@@ -317,9 +317,9 @@ class Transaction(models.Model):
         if self.contract_id and not self.contract_address:
             self.contract_address = self.contract.contract_address
 
-    def save(self, *args, **kwargs):
         if self.state not in self.states:
             raise Exception('Invalid state', self.state)
+
         result = super().save(*args, **kwargs)
         if self.sender_id:
             self.sender.spool()
