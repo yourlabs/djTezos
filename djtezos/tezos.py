@@ -8,7 +8,7 @@ from django.conf import settings
 from pytezos import Contract, Key, pytezos
 from mnemonic import Mnemonic
 from tenacity import retry, stop_after_attempt
-from rest_framework.exceptions import ValidationError
+from django.core.exceptions import ValidationError
 from pytezos.rpc.node import RpcError
 from requests.exceptions import ConnectionError
 
