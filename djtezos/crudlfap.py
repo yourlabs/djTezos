@@ -80,7 +80,15 @@ class TransactionCreateView(crudlfap.CreateView):
             owner=self.request.user)
 
 
-class TransactionRouter(crudlfap.Router):
+class TransactionRouterMixin:
+    def has_perm(self, view):
+        return view.request.user.is_authenticated
+
+    def get_queryset(self, view):
+        return super().get_queryset(view).for_user(view.request.user)
+
+
+class TransactionRouter(TransactionRouterMixin, crudlfap.Router):
     model = Transaction
     icon = 'compare_arrows'
     views = [
@@ -96,10 +104,4 @@ class TransactionRouter(crudlfap.Router):
             ),
         ),
     ]
-
-    def has_perm(self, view):
-        return view.request.user.is_authenticated
-
-    def get_queryset(self, view):
-        return super().get_queryset(view).for_user(view.request.user)
 TransactionRouter().register()
