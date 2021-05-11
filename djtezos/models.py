@@ -260,7 +260,11 @@ class Transaction(models.Model):
     )
     function = models.CharField(max_length=100, null=True, blank=True)
     args = models.JSONField(null=True, default=list, blank=True)
-    amount = models.PositiveIntegerField(default=0, blank=True)
+    amount = models.PositiveIntegerField(
+        default=0,
+        blank=True,
+        help_text='Amount in xTZ',
+    )
 
     STATE_CHOICES = (
         ('held', _('Held')),
