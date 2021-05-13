@@ -85,7 +85,7 @@ class TransactionRouterMixin:
         return view.request.user.is_authenticated
 
     def get_queryset(self, view):
-        return super().get_queryset(view).for_user(view.request.user)
+        return super().get_queryset(view).for_user(view.request.user).order_by('-created_at')
 
 
 class TransactionRouter(TransactionRouterMixin, crudlfap.Router):
