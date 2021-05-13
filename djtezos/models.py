@@ -268,12 +268,18 @@ class Transaction(models.Model):
         on_delete=models.CASCADE,
         related_name='call_set',
     )
-    function = models.CharField(max_length=100, null=True, blank=True)
+    function = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        db_index=True,
+    )
     args = models.JSONField(null=True, default=list, blank=True)
     amount = models.PositiveIntegerField(
-        default=0,
+        null=True,
         blank=True,
         help_text='Amount in xTZ',
+        db_index=True,
     )
 
     STATE_CHOICES = (
@@ -425,14 +431,9 @@ class Transaction(models.Model):
         return self.provider.deploy(self)
 
 
-class ContractQuerySet(TransactionQuerySet):
-    def get_queryset(self):
-        return super().get_queryset().filter(function=None, amount=None)
-
-
 class ContractManager(TransactionManager):
     def get_queryset(self):
-        return ContractQuerySet(self.model)
+        return super().get_queryset().filter(function=None, amount=None)
 
 
 class Contract(Transaction):
@@ -442,14 +443,9 @@ class Contract(Transaction):
         proxy = True
 
 
-class CallQuerySet(TransactionQuerySet):
-    def get_queryset(self):
-        return super().get_queryset().exclude(function=None)
-
-
 class CallManager(TransactionManager):
     def get_queryset(self):
-        return CallQuerySet(self.model)
+        return super().get_queryset().exclude(function=None)
 
 
 class Call(Transaction):
@@ -459,16 +455,13 @@ class Call(Transaction):
         proxy = True
 
 
-class TransferQuerySet(TransactionQuerySet):
+class TransferManager(TransactionManager):
     def get_queryset(self):
         return super().get_queryset().exclude(amount=None)
 
 
-class TransferManager(TransactionManager):
-    def get_queryset(self):
-        return TransferQuerySet(self.model)
-
-
 class Transfer(Transaction):
+    objects = TransferManager()
+
     class Meta:
         proxy = True
