@@ -268,7 +268,12 @@ class Transaction(models.Model):
         on_delete=models.CASCADE,
         related_name='call_set',
     )
-    function = models.CharField(max_length=100, null=True, blank=True)
+    function = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        db_index=True,
+    )
     args = models.JSONField(null=True, default=list, blank=True)
     amount = models.PositiveIntegerField(
         null=True,
