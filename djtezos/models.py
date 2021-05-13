@@ -426,14 +426,9 @@ class Transaction(models.Model):
         return self.provider.deploy(self)
 
 
-class ContractQuerySet(TransactionQuerySet):
-    def get_queryset(self):
-        return super().get_queryset().filter(function=None, amount=None)
-
-
 class ContractManager(TransactionManager):
     def get_queryset(self):
-        return ContractQuerySet(self.model)
+        return super().get_queryset().filter(function=None, amount__in=(None, 0))
 
 
 class Contract(Transaction):
@@ -443,14 +438,9 @@ class Contract(Transaction):
         proxy = True
 
 
-class CallQuerySet(TransactionQuerySet):
-    def get_queryset(self):
-        return super().get_queryset().exclude(function=None)
-
-
 class CallManager(TransactionManager):
     def get_queryset(self):
-        return CallQuerySet(self.model)
+        return super().get_queryset().exclude(function=None)
 
 
 class Call(Transaction):
@@ -460,16 +450,13 @@ class Call(Transaction):
         proxy = True
 
 
-class TransferQuerySet(TransactionQuerySet):
-    def get_queryset(self):
-        return super().get_queryset().exclude(amount=None)
-
-
 class TransferManager(TransactionManager):
     def get_queryset(self):
-        return TransferQuerySet(self.model)
+        return super().get_queryset().filter(amount__gt=0)
 
 
 class Transfer(Transaction):
+    objects = TransferManager()
+
     class Meta:
         proxy = True
