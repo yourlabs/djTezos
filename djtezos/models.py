@@ -428,7 +428,7 @@ class Transaction(models.Model):
 
 class ContractManager(TransactionManager):
     def get_queryset(self):
-        return super().get_queryset().filter(function=None, amount__in=(None, 0))
+        return super().get_queryset().filter(function=None, amount=None)
 
 
 class Contract(Transaction):
@@ -452,7 +452,7 @@ class Call(Transaction):
 
 class TransferManager(TransactionManager):
     def get_queryset(self):
-        return super().get_queryset().filter(amount__gt=0)
+        return super().get_queryset().exclude(amount=None)
 
 
 class Transfer(Transaction):

@@ -3,6 +3,11 @@
 from django.db import migrations, models
 
 
+def null_amount(apps, schema_editor):
+    Transaction = apps.get_model('djtezos', 'Transaction')
+    Transaction.objects.filter(amount=0).update(amount=None)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -15,4 +20,5 @@ class Migration(migrations.Migration):
             name='amount',
             field=models.PositiveIntegerField(blank=True, db_index=True, help_text='Amount in xTZ', null=True),
         ),
+        migrations.RunPython(null_amount),
     ]
