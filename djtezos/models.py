@@ -71,6 +71,16 @@ def decrypt(secret):
 
 
 class Account(models.Model):
+    created_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        auto_now_add=True,
+    )
+    updated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        auto_now=True,
+    )
     address = models.CharField(
         max_length=255,
         blank=True,
