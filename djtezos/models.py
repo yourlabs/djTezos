@@ -236,8 +236,6 @@ class Transaction(models.Model):
     sender = models.ForeignKey(
         'Account',
         related_name='transactions_sent',
-        blank=True,
-        null=True,
         on_delete=models.CASCADE,
     )
     receiver = models.ForeignKey(
