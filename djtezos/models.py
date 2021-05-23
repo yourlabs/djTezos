@@ -137,8 +137,16 @@ class Account(models.Model):
             return
         self.caller.spool('blockchain')
 
+    @property
+    def balance(self):
+        return self.get_balance()
+
     def get_balance(self):
         return self.provider.get_balance(self.address, self.private_key)
+
+    def get_tzkt_url(self):
+        code = self.blockchain.endpoint.rstrip('/').split('/')[-1]
+        return f'https://{code}.tzkt.io/{self.address}/'
 
 
 def sender_queue(pk):
@@ -429,6 +437,10 @@ class Transaction(models.Model):
 
     def deploy(self):
         return self.provider.deploy(self)
+
+    def get_tzkt_url(self):
+        code = self.blockchain.endpoint.rstrip('/').split('/')[-1]
+        return f'https://{code}.tzkt.io/{self.txhash}/'
 
 
 class ContractManager(TransactionManager):
