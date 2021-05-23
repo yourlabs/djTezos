@@ -43,6 +43,17 @@ AccountRouter().register()
 class BlockchainRouter(crudlfap.Router):
     model = Blockchain
     icon = 'link'
+
+    def has_perm(self, view):
+        if view.urlname in ('list', 'detail'):
+            return True
+        return view.request.user.is_staff
+
+    def get_queryset(self, view):
+        if view.request.user.is_staff:
+            return Blockchain.objects.all()
+        else:
+            return Blockchain.objects.filter(is_active=True)
 BlockchainRouter().register()
 
 
