@@ -24,8 +24,10 @@ class AccountRouter(crudlfap.Router):
         crudlfap.DetailView,
         crudlfap.ListView.clone(
             table_sequence=(
+                'id',
                 'address',
                 'blockchain',
+                'created_at',
             ),
         ),
     ]
