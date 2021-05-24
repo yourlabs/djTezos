@@ -236,8 +236,6 @@ class Transaction(models.Model):
     sender = models.ForeignKey(
         'Account',
         related_name='transactions_sent',
-        blank=True,
-        null=True,
         on_delete=models.CASCADE,
     )
     receiver = models.ForeignKey(
@@ -436,6 +434,11 @@ class Transaction(models.Model):
         # close_old_connections()
 
     def deploy(self):
+        if self.function:
+            if not self.contract_id or not self.contract.contract_address:
+                raise PermanentError('Held because contract did not deploy')
+            # always update contract address prior to calling functions
+            self.contract_address = self.contract.contract_address
         return self.provider.deploy(self)
 
     def get_tzkt_url(self):
