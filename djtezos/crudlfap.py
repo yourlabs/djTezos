@@ -1,4 +1,5 @@
 from crudlfap import shortcuts as crudlfap
+from crudlfap import html
 
 from django import forms
 from django.utils.translation import gettext_lazy as _
@@ -8,8 +9,14 @@ from .models import Account, Blockchain, Transaction
 
 class AccountCreateView(crudlfap.CreateView):
     fields = [
+        'name',
         'blockchain',
     ]
+
+    def get_form(self):
+        self.form = super().get_form()
+        self.form.fields['blockchain'].queryset = Blockchain.objects.filter(is_active=True)
+        return self.form
 
     def form_valid(self):
         self.form.instance.owner = self.request.user
@@ -21,11 +28,14 @@ class AccountRouter(crudlfap.Router):
     icon = 'vpn_key'
     views = [
         AccountCreateView,
+        crudlfap.DeleteObjectsView,
+        crudlfap.DeleteView,
         crudlfap.DetailView,
         crudlfap.ListView.clone(
             table_sequence=(
                 'id',
                 'address',
+                'balance',
                 'blockchain',
                 'created_at',
             ),
@@ -43,17 +53,23 @@ AccountRouter().register()
 class BlockchainRouter(crudlfap.Router):
     model = Blockchain
     icon = 'link'
+    views = [
+        crudlfap.CreateView,
+        crudlfap.DeleteView,
+        crudlfap.UpdateView,
+        crudlfap.DetailView,
+        crudlfap.ListView.clone(
+            table_fields=('name', 'endpoint', 'is_active'),
+        ),
+    ]
 
     def has_perm(self, view):
         if view.urlname in ('list', 'detail'):
             return True
-        return view.request.user.is_staff
+        return view.request.user.is_superuser or view.request.user.is_staff
 
     def get_queryset(self, view):
-        if view.request.user.is_staff:
-            return Blockchain.objects.all()
-        else:
-            return Blockchain.objects.filter(is_active=True)
+        return Blockchain.objects.all()
 BlockchainRouter().register()
 
 
@@ -105,7 +121,6 @@ class TransactionRouter(TransactionRouterMixin, crudlfap.Router):
     model = Transaction
     icon = 'compare_arrows'
     views = [
-        #TransactionCreateView,
         crudlfap.DeleteObjectsView,
         crudlfap.DeleteView,
         crudlfap.DetailView,

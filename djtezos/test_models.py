@@ -4,7 +4,7 @@ import pytest
 import time
 
 from django.contrib.auth import get_user_model
-from djtezos.models import Blockchain, Contract, Call, Transfer, Transaction
+from djtezos.models import Blockchain, Contract, Call, Transfer, Transaction, deploy_queue
 
 
 User = get_user_model()
@@ -48,10 +48,26 @@ def tzlocal():
     )
 
 
-@pytest.mark.django_db
-def test_story(user, tzlocal):
+@pytest.fixture
+def account(user, tzlocal):
     account = user.account_set.create(blockchain=tzlocal)
+    account.generate_private_key()
+    account.save()
+    return account
 
+
+def watch(tx, check):
+    tries = 100
+    while tries and not check(tx):
+        tx.sender.blockchain.provider.watch_blockchain(tx.sender.blockchain)
+        tx.refresh_from_db()
+        tries -= 1
+        time.sleep((100 - tries) / 2.0)
+    assert check(tx)
+
+
+@pytest.mark.django_db
+def test_story(user, account, tzlocal):
     contract = Transaction.objects.create(
         sender=account,
         contract_micheline=mich,
@@ -59,8 +75,7 @@ def test_story(user, tzlocal):
         args={'int': '1'},
         state='deploy',
     )
-    contract = Contract.objects.get(pk=contract.pk)
-    assert contract.state == 'done'
+    watch(contract, lambda tx: tx.state == 'done')
 
     call = Transaction.objects.create(
         sender=account,
@@ -69,11 +84,12 @@ def test_story(user, tzlocal):
         args=[3],
         state='deploy',
     )
-    call = Call.objects.get(pk=call.pk)
-    assert call.state == 'done'
+    watch(call, lambda tx: tx.state == 'done')
 
     balance = account.get_balance()
     account2 = user.account_set.create(blockchain=tzlocal)
+    account2.generate_private_key()
+    account2.save()
     balance2 = account2.get_balance()
     transfer = Transaction.objects.create(
         sender=account,
@@ -81,8 +97,8 @@ def test_story(user, tzlocal):
         amount=10000,
         state='deploy',
     )
-    transfer = Transfer.objects.get(pk=transfer.pk)
-    assert transfer.state == 'done'
+    watch(transfer, lambda tx: tx.state == 'done')
+
     tries = 30
     while tries and not account.get_balance() < balance:
         time.sleep(1)
@@ -96,9 +112,7 @@ def test_story(user, tzlocal):
 
 
 @pytest.mark.django_db
-def test_wrong_storage(user, tzlocal):
-    account = user.account_set.create(blockchain=tzlocal)
-
+def test_wrong_storage(account):
     contract = Transaction.objects.create(
         sender=account,
         contract_micheline=mich,
@@ -112,9 +126,7 @@ def test_wrong_storage(user, tzlocal):
 
 
 @pytest.mark.django_db
-def test_wrong_args(user, tzlocal):
-    account = user.account_set.create(blockchain=tzlocal)
-
+def test_wrong_args(account):
     contract = Transaction.objects.create(
         sender=account,
         contract_micheline=mich,
@@ -122,7 +134,20 @@ def test_wrong_args(user, tzlocal):
         args={'int': '1'},
         state='deploy',
     )
-    contract = Contract.objects.get(pk=contract.pk)
+    contract.refresh_from_db()
+    assert contract.state == 'watching'
+
+    # need now to call the watch function that will first either:
+    # - drop txhash and contract_address of all transactions of level above the
+    #   current head, to support the reorg case, this will allow users to retry
+    #   their transactions
+    # - or synchro new operations from current head level to last synchronized
+    #   level
+    # - and then poll the head for new level to start synchronizing on it
+    while not contract.contract_address:
+        account.blockchain.provider.watch_blockchain(account.blockchain)
+        contract.refresh_from_db()
+
     assert contract.state == 'done'
 
     call = Transaction.objects.create(

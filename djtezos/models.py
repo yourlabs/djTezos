@@ -3,8 +3,10 @@ import importlib
 import json
 import logging
 import random
+import requests.exceptions
 import string
 import sys
+import time
 import traceback
 import uuid
 
@@ -97,9 +99,18 @@ class Account(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
     )
+    balance = models.DecimalField(
+        max_digits=18,
+        decimal_places=9,
+        null=True,
+        blank=True,
+        editable=False,
+    )
+    name = models.CharField(max_length=100)
 
     def __str__(self):
-        return self.address
+        balance = int(self.balance) if self.balance else 0
+        return f'{self.name} {balance}tz'
 
     @property
     def provider(self):
@@ -109,85 +120,32 @@ class Account(models.Model):
     def private_key(self):
         return decrypt(self.crypted_key) if self.crypted_key else None
 
-    @property
-    def to_spool(self):
-        """Return transactions pending for action"""
-        return self.transactions_sent.exclude(
-            state__in=(
-                'held',
-                'done',
-                'deploy-aborted',
-                'watch-aborted',
-                'postdeploy-aborted',
-            ),
-        ).order_by('created_at').select_subclasses()
-
-    @property
-    def caller(self):
-        if '_djcall_caller' not in self.__dict__:
-            # get existing sender for this sender or create a new one
-            self._djcall_caller = Caller.objects.get_or_create(
-                callback='djtezos.models.sender_queue',
-                kwargs=dict(pk=str(self.pk)),
-            )[0]
-        return self._djcall_caller
-
-    def spool(self, force=False):
-        if not force and self.caller.running:
-            return
-        self.caller.spool('blockchain')
-
-    @property
-    def balance(self):
-        return self.get_balance()
-
     def get_balance(self):
         return self.provider.get_balance(self.address, self.private_key)
 
+    @property
+    def codename(self):
+        return self.blockchain.endpoint.rstrip('/').split('/')[-1]
+
+    def get_tzkt_api_url(self):
+        return f'https://api.{self.codename}.tzkt.io/v1/accounts/{self.address}'
+
     def get_tzkt_url(self):
-        code = self.blockchain.endpoint.rstrip('/').split('/')[-1]
-        return f'https://{code}.tzkt.io/{self.address}/'
+        return f'https://{self.codename}.tzkt.io/{self.address}/'
 
+    def generate_private_key(self):
+        if self.crypted_key or not self.owner:
+            return
 
-def sender_queue(pk):
-    acc = Account.objects.filter(pk=pk).first()
-    if not acc:
-        logger.error(f'{pk} does not exist anymore')
-        return
+        passphrase = ''.join(
+            random.choice(string.ascii_letters) for i in range(42)
+        )
 
-    tx = acc.to_spool.first()
+        self.address, private_key = (
+            self.blockchain.provider.create_wallet(passphrase)
+        )
 
-    if not tx:
-        logger.info(f'Account {pk} has no pending transaction')
-        return
-
-    if tx.state in ('deploy', 'deploying'):
-        tx.deploy_state()
-
-    elif tx.state in ('watch', 'watching'):
-        tx.watch_state()
-
-    elif tx.state in ('postdeploy', 'postdeploying'):
-        tx.postdeploy_state()
-
-    # restart myself until I shut down by myself because my work is done
-    acc.spool(force=True)
-
-
-def account_wallet(sender, instance, **kwargs):
-    if instance.crypted_key or not instance.owner:
-        return
-
-    passphrase = ''.join(
-        random.choice(string.ascii_letters) for i in range(42)
-    )
-
-    instance.address, private_key = (
-        instance.blockchain.provider.create_wallet(passphrase)
-    )
-
-    instance.crypted_key = encrypt(private_key)
-signals.pre_save.connect(account_wallet, sender=Account)
+        self.crypted_key = encrypt(private_key)
 
 
 class Blockchain(models.Model):
@@ -202,6 +160,8 @@ class Blockchain(models.Model):
     confirmation_blocks = models.IntegerField(default=0)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    max_level = models.PositiveIntegerField(default=None, blank=True, null=True)
+    min_level = models.PositiveIntegerField(default=None, blank=True, null=True)
 
     def __str__(self):
         return self.name
@@ -219,12 +179,22 @@ class TransactionQuerySet(InheritanceQuerySetMixin, models.QuerySet):
     def for_user(self, user):
         return self.filter(
             Q(sender__owner=user) | Q(receiver__owner=user),
-        ).distinct()
+        )
 
 
 class TransactionManager(InheritanceManagerMixin, models.Manager):
     def get_queryset(self):
         return TransactionQuerySet(self.model)
+
+
+def deploy_queue(pk):
+    tx = Transaction.objects.get(pk=pk)
+    if tx.function:
+        if not tx.contract.contract_address:
+            return  # don't deploy calls before their contract is deployed
+
+    if not tx.txhash:
+        tx.deploy()
 
 
 class Transaction(models.Model):
@@ -236,7 +206,6 @@ class Transaction(models.Model):
     sender = models.ForeignKey(
         'Account',
         related_name='transactions_sent',
-        blank=True,
         null=True,
         on_delete=models.CASCADE,
     )
@@ -283,10 +252,16 @@ class Transaction(models.Model):
         db_index=True,
     )
     args = models.JSONField(null=True, default=list, blank=True)
+    args_mich = models.JSONField(null=True, default=list, blank=True)
     amount = models.PositiveIntegerField(
         null=True,
         blank=True,
         help_text='Amount in xTZ',
+        db_index=True,
+    )
+    level = models.PositiveIntegerField(
+        null=True,
+        blank=True,
         db_index=True,
     )
 
@@ -298,9 +273,6 @@ class Transaction(models.Model):
         ('watch', _('To watch')),
         ('watching', _('Watching')),
         ('watch-aborted', _('Watch aborted')),
-        ('postdeploy', _('To post-deploy')),
-        ('postdeploying', _('Post-deploying')),
-        ('postdeploy-aborted', _('Postdeploy aborted')),
         ('done', _('Finished')),
     )
     state = models.CharField(
@@ -348,10 +320,16 @@ class Transaction(models.Model):
         if self.state not in self.states:
             raise Exception('Invalid state', self.state)
 
-        result = super().save(*args, **kwargs)
-        if self.sender_id:
-            self.sender.spool()
-        return result
+        res = super().save(*args, **kwargs)
+
+        if self.state == 'deploy':
+            caller = Caller.objects.get_or_create(
+                callback='djtezos.models.deploy_queue',
+                kwargs=dict(pk=str(self.pk)),
+            )[0].spool('blockchain')
+
+        return res
+
 
     def call(self, **kwargs):
         return Transaction.objects.create(
@@ -359,68 +337,29 @@ class Transaction(models.Model):
             **kwargs
         )
 
-    def deploy_state(self):
+    def deploy(self):
         self.state_set('deploying')
-        try:
-            self.txhash = self.deploy()
-        except Exception as exception:
-            self.error = str(exception)
-            if isinstance(exception, PermanentError):
-                logger.exception(f'{self} deploy permanent error {self.error}')
+        tries = 30
+        while tries:
+            try:
+                self.provider.deploy(self)
+            except Exception as exception:
+                if isinstance(exception, requests.exceptions.ConnectionError):
+                    if tries:
+                        # forgive connection errors
+                        tries -= 1
+                        time.sleep(tries)
+                        continue
+                self.error = str(exception)
+                logger.exception(f'{self} error {self.error}')
                 self.state_set('deploy-aborted')
             else:
-                if isinstance(exception, TemporaryError):
-                    logger.info(f'{self} temporary error: {self.error}')
+                self.error = ''
+                if self.function or self.amount:
+                    self.state_set('done')
                 else:
-                    logger.exception(f'{self} deploy exception: {self.error}')
-                self.state_set('deploy')
-        else:
-            self.error = ''
-            self.state_set('watch')
-
-    def watch_state(self):
-        self.state_set('watching')
-        try:
-            self.watch()
-        except Exception as exception:
-            self.error = str(exception)
-            if isinstance(exception, PermanentError):
-                logger.exception(f'{self} watch permanent error {self.error}')
-                self.state_set('watch-aborted')
-            else:
-                if isinstance(exception, TemporaryError):
-                    logger.info(f'{self} temporary error: {self.error}')
-                else:
-                    logger.exception(f'{self} watch exception: {self.error}')
-                self.state_set('watch')
-        else:
-            self.error = ''
-            self.state_set('postdeploy')
-
-    def watch(self):
-        self.sender.blockchain.provider.watch(self)
-
-    def postdeploy_state(self):
-        self.state_set('postdeploying')
-        try:
-            self.postdeploy()
-        except Exception as exception:
-            self.error = str(exception)
-            if isinstance(exception, PermanentError):
-                logger.exception(f'{self} postdeploy permanent error {self.error}')
-                self.state_set('postdeploy-aborted')
-            else:
-                if isinstance(exception, TemporaryError):
-                    logger.info(f'{self} temporary error: {self.error}')
-                else:
-                    logger.exception(f'{self} postdeploy exception: {self.error}')
-                self.state_set('postdeploy')
-        else:
-            self.error = ''
-            self.state_set('done')
-
-    def postdeploy(self):
-        pass
+                    self.state_set('watching')
+            break
 
     def state_set(self, state):
         self.state = state
@@ -434,9 +373,6 @@ class Transaction(models.Model):
         # not sure why not
         # django.db.connection.close()
         # close_old_connections()
-
-    def deploy(self):
-        return self.provider.deploy(self)
 
     def get_tzkt_url(self):
         code = self.blockchain.endpoint.rstrip('/').split('/')[-1]

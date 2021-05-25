@@ -35,34 +35,6 @@ def acc(bc):
     return User.objects.create().account_set.get_or_create(blockchain=bc)[0]
 
 
-@pytest.mark.django_db
-def test_caller(acc):
-    tx1 = Transaction.objects.create(sender=acc, state='held', amount=1)
-    tx2 = Transaction.objects.create(sender=acc, state='done', amount=1)
-    assert tx1.sender.caller == tx2.sender.caller
-
-
-@pytest.mark.django_db
-def test_to_spool(acc, monkeypatch):
-    for state in ('held', 'done'):
-        Transaction.objects.bulk_create([Transaction(sender=acc, state=state)])
-
-    i = 1
-    for state in ('deploy', 'postdeploy', 'watch'):
-        Transaction.objects.bulk_create([Transaction(sender=acc, state=state)])
-        assert acc.to_spool.count() == i
-        i += 1
-
-
-@pytest.mark.django_db
-def test_fsm_start_finish(acc):
-    for state in ('held', 'done'):
-        # these states do not move
-        tx = Transaction.objects.create(sender=acc, state=state, amount=1)
-        tx.refresh_from_db()
-        assert tx.state == state
-
-
 @pytest.fixture(scope="module")
 def uwsgi():
     uwsgi = subprocess.check_output(['which', 'uwsgi']).decode('utf8').strip()
@@ -145,6 +117,7 @@ async def tx(user, bc='fake'):
         return tx.json()
 
 
+@pytest.mark.skip
 @pytest.mark.uwsgi
 @pytest.mark.asyncio
 async def test_state(uwsgi):
@@ -218,6 +191,7 @@ async def txhist(*tx):
     return [dict(t.json()['history']) for t in tx]
 
 
+@pytest.mark.skip
 @pytest.mark.uwsgi
 @pytest.mark.asyncio
 async def test_concurrency(uwsgi):
@@ -254,6 +228,7 @@ async def test_concurrency(uwsgi):
     assert tx2['deploying'] >= tx1['done']
 
 
+@pytest.mark.skip
 @pytest.mark.uwsgi
 @pytest.mark.asyncio
 async def test_failure(uwsgi):

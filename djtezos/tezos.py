@@ -13,7 +13,7 @@ from pytezos.rpc.node import RpcError
 from requests.exceptions import ConnectionError
 
 from .exceptions import PermanentError, TemporaryError
-from .models import Account
+from .models import Account, Transaction
 from .provider import BaseProvider
 
 logger = logging.getLogger('djtezos.tezos')
@@ -39,7 +39,6 @@ class Provider(BaseProvider):
         'edsk4QLrcijEffxV31gGdN2HU7UpyJjA8drFoNcmnB28n89YjPNRFm',
     )
 
-    @retry(reraise=True, stop=stop_after_attempt(RETRIES))
     def transfer(self, transaction):
         """
         rpc error if balance too low :
@@ -175,25 +174,26 @@ class Provider(BaseProvider):
             except StopIteration:
                 opg = None
             tries -= 1
-            time.sleep(1)
+            time.sleep(100 - tries)
         return opg
 
-    @retry(reraise=True, stop=stop_after_attempt(RETRIES))
     def deploy(self, transaction):
-        try:
-            if transaction.amount:
-                return self.transfer(transaction)
-            elif transaction.function:
-                return self.send(transaction)
-            else:
-                return self.originate(transaction)
-        except RpcError as rpc_error:
-            if rpc_error.args[0]['kind'] == 'temporary':
-                raise TemporaryError(*rpc_error.args)
-            elif rpc_error.args[0]['kind'] == 'permanent':
-                raise PermanentError(*rpc_error.args)
-            raise
-
+        tries = 30
+        while tries:
+            try:
+                if transaction.amount:
+                    return self.transfer(transaction)
+                elif transaction.function:
+                    return self.send(transaction)
+                else:
+                    return self.originate(transaction)
+            except RpcError as rpc_error:
+                if rpc_error.args[0]['kind'] == 'temporary':
+                    if tries:
+                        tries -= 1
+                        time.sleep(30 - tries)
+                        continue
+                raise
 
     def originate(self, transaction):
         logger.debug(f'{transaction}.originate({transaction.args}): start')
@@ -223,9 +223,9 @@ class Provider(BaseProvider):
             # this seems not to be working for us, systematic TimeoutError
             #min_confirmations=transaction.blockchain.confirmation_blocks,
         )
-        return origination['hash']
+        transaction.gas = origination['contents'][0]['fee']
+        transaction.txhash = origination['hash']
 
-    @retry(reraise=True, stop=stop_after_attempt(RETRIES))
     def send(self, transaction):
         logger.debug(f'{transaction}({transaction.args}): get_client')
         client = self.get_client(transaction.sender.private_key)
@@ -245,7 +245,7 @@ class Provider(BaseProvider):
 
         client = pytezos.using(shell=self.blockchain.endpoint)
         start_level = current_level = client.shell.head.metadata()['level']['level_position']
-        max_depth = 500  # max number of blocks to search backwards for
+        max_depth = 50  # max number of blocks to search backwards for
 
         while True:
             # try to find the operation by iterating over ranges of 20 blocks
@@ -274,3 +274,120 @@ class Provider(BaseProvider):
             transaction.contract_address = result['originated_contracts'][0]
 
         logger.info(f'{transaction}: watch success')
+
+    def watch_blockchain(self, blockchain):
+        client = pytezos.using(shell=blockchain.endpoint)
+        start_level = current_level = client.shell.head.metadata()['level']['level_position']
+
+        if blockchain.max_level and start_level < blockchain.max_level:
+            # reorg
+            Transaction.objects.filter(
+                sender__blockchain=blockchain,
+                level__gte=blockchain.max_level,
+            ).exclude(level=None).update(
+                level=None,
+                txhash=None,
+                contract_address=None,
+                state='held',
+            )
+            blockchain.max_level = blockchain.max_level
+            blockchain.save()
+            return  # commit to reorg in a transaction
+
+        if blockchain.max_level and start_level == blockchain.max_level:
+            # no need to go all way back further if we are up to date just
+            # check the head
+            max_depth = 1
+
+        if blockchain.max_level and start_level > blockchain.max_level:
+            # go all way back to where we left
+            max_depth = (start_level - blockchain.max_level) or 1
+
+        if not blockchain.max_level:
+            # go with an arbitrary backlog
+            max_depth = 500
+
+        hashes = Transaction.objects.filter(
+            sender__blockchain=blockchain
+        ).exclude(
+            txhash=None
+        ).values_list('txhash', flat=True)
+
+        contracts = Transaction.objects.exclude(
+            contract_address=None,
+        ).filter(
+            sender__blockchain=blockchain,
+            function=None,
+            amount=None,
+        )
+
+        addresses = contracts.values_list(
+            'contract_address',
+            flat=True,
+        )
+
+        while current_level and start_level - current_level < max_depth:
+            print('level', current_level)
+            block = client.shell.blocks[current_level]
+            for ops in block.operations():
+                for op in ops:
+                    if op['hash'] not in hashes:
+                        continue
+                    for content in op.get('contents', []):
+                        if content['kind'] == 'origination':
+                            print(f'Syncing origination from {op["hash"]}')
+                            result = content['metadata']['operation_result']
+                            tx = Transaction.objects.get(txhash=op['hash'])
+                            spool = not tx.contract_address
+                            tx.level = current_level
+                            tx.contract_address = result['originated_contracts'][0]
+                            tx.gas = content['fee']
+                            tx.state_set('done')
+                            if spool:
+                                # check if any function call to deploy afterward
+                                calls = Transaction.objects.filter(
+                                    contract_id=tx.pk,
+                                    txhash=None,
+                                ).exclude(
+                                    function=None
+                                ).order_by('created_at')
+
+                                if calls:
+                                    for call in calls:
+                                        Caller.objects.get_or_create(
+                                            callback='djtezos.models.deploy_queue',
+                                            kwargs=dict(pk=str(call.pk)),
+                                        )[0].spool('blockchain')
+
+                        elif content['kind'] == 'transaction':
+                            print(f'Syncing transaction from {op["hash"]}')
+                            destination = content.get('destination', None)
+                            if destination in addresses:
+                                self.sync_call(current_level, op, content, contracts, blockchain)
+
+            current_level -= 1
+
+        blockchain.max_level = start_level - 1  # consider head as suceptible to change
+        blockchain.save()
+
+    def sync_call(self, level, op, content, contracts, blockchain):
+        contract = contracts.get(contract_address=content['destination'])
+
+        parameters = content.get('parameters', {})
+
+        call = contract.call_set.filter(
+            txhash=op['hash'],
+            contract_address=content['destination'],
+        ).first()
+        if not call:
+            call = Call(
+                txhash=op['hash'],
+                function=parameters['entrypoint'],
+                contract_address=content['destination'],
+                contract=contract,
+            )
+        call.state = 'done'
+        call.args_mich = parameters['value']
+        call.gas = content['fee']
+        call.level = level
+        call.save()

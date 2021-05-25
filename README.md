@@ -48,6 +48,8 @@ Create an account for a user:
 
 ```py
 account = user.account_set.create(blockchain=tzlocal)
+account.generate_private_key()
+account.save()
 ```
 
 Users can have as many accounts as you want.
@@ -64,8 +66,9 @@ Create a Transaction with a contract_micheline to deploy a smart contract:
 ```python
     contract = Transaction.objects.create(
         sender=account,
+        name='TICKR',
         contract_micheline=mich,
-        contract_name='test',
+        contract_name='PyMich FA 1.2',
         args={'int': '1'},
         state='deploy',
     )
@@ -104,6 +107,19 @@ Create a transfer on the blockchain:
         state='deploy',
     )
 ```
+
+## Migrate from v0.4.x
+
+Callbacks have been rewritten in a release candidate version, where you need to:
+
+- call `Account.generate_private_key()` **and** `Account.save()` to
+  be able to deploy with it, or provision the private key by yourself
+  through the AES encryption defined in models.py
+- run at repeated intervals: `./manage.py djtezos_sync`, will catch up backlog
+  at first, then sync incrementally, support reorg
+- run at repeated intervals: `./manage.py djtezos_balance`
+
+Also, you can't use a form to show a sender field without filling it.
 
 ## Migrate from djblockchain
 
