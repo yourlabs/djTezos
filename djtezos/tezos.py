@@ -342,6 +342,8 @@ class Provider(BaseProvider):
                             tx.level = current_level
                             tx.contract_address = result['originated_contracts'][0]
                             tx.gas = content['fee']
+                            # if script := content.get('script', None):
+                            #     tx.contract_micheline = content['script']
                             tx.state_set('done')
                             if spool:
                                 # check if any function call to deploy afterward
