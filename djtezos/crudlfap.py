@@ -20,6 +20,7 @@ class AccountCreateView(crudlfap.CreateView):
 
     def form_valid(self):
         self.form.instance.owner = self.request.user
+        self.form.instance.generate_private_key()
         return super().form_valid()
 
 
