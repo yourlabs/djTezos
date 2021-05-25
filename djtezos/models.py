@@ -207,14 +207,18 @@ class Transaction(models.Model):
         'Account',
         related_name='transactions_sent',
         null=True,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
     )
     receiver = models.ForeignKey(
         'Account',
         related_name='transactions_received',
         blank=True,
         null=True,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+    )
+    followers = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
     )
     created_at = models.DateTimeField(
         null=True,
@@ -264,6 +268,7 @@ class Transaction(models.Model):
         blank=True,
         db_index=True,
     )
+    searched = models.ManyToManyField('blockchain', blank=True)
 
     STATE_CHOICES = (
         ('held', _('Held')),
@@ -308,6 +313,7 @@ class Transaction(models.Model):
             not self.amount
             and not self.function
             and not self.contract_micheline
+            and self.state == 'deploy'
         ):
             raise ValidationError('Requires amount, function or micheline')
 

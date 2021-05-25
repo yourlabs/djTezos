@@ -275,7 +275,7 @@ class Provider(BaseProvider):
 
         logger.info(f'{transaction}: watch success')
 
-    def watch_blockchain(self, blockchain):
+    def watch_blockchain(self, blockchain, full=False):
         client = pytezos.using(shell=blockchain.endpoint)
         start_level = current_level = client.shell.head.metadata()['level']['level_position']
 
@@ -293,19 +293,6 @@ class Provider(BaseProvider):
             blockchain.max_level = blockchain.max_level
             blockchain.save()
             return  # commit to reorg in a transaction
-
-        if blockchain.max_level and start_level == blockchain.max_level:
-            # no need to go all way back further if we are up to date just
-            # check the head
-            max_depth = 1
-
-        if blockchain.max_level and start_level > blockchain.max_level:
-            # go all way back to where we left
-            max_depth = (start_level - blockchain.max_level) or 1
-
-        if not blockchain.max_level:
-            # go with an arbitrary backlog
-            max_depth = 500
 
         hashes = Transaction.objects.filter(
             sender__blockchain=blockchain
@@ -326,7 +313,38 @@ class Provider(BaseProvider):
             flat=True,
         )
 
-        while current_level and start_level - current_level < max_depth:
+        import_contracts = Transaction.objects.filter(
+            txhash=None,
+            sender=None
+        ).exclude(
+            contract_address=None,
+            searched=blockchain,
+        )
+        to_import = import_contracts.values_list('contract_address', flat=True)
+        to_import = set(to_import)
+
+        if blockchain.max_level and start_level == blockchain.max_level:
+            # no need to go all way back further if we are up to date just
+            # check the head
+            max_depth = 1
+
+        if blockchain.max_level and start_level > blockchain.max_level:
+            # go all way back to where we left
+            max_depth = (start_level - blockchain.max_level) or 1
+
+        if not blockchain.max_level:
+            # go with an arbitrary backlog
+            max_depth = 500
+
+        def dig():
+            if not current_level:
+                return
+            if full and to_import:
+                return True
+            if start_level - current_level < max_depth:
+                return True
+
+        while dig():
             print('level', current_level)
             block = client.shell.blocks[current_level]
             for ops in block.operations():
@@ -337,10 +355,16 @@ class Provider(BaseProvider):
                         if content['kind'] == 'origination':
                             print(f'Syncing origination from {op["hash"]}')
                             result = content['metadata']['operation_result']
-                            tx = Transaction.objects.get(txhash=op['hash'])
+                            tx = Transaction.objects.filter(txhash=op['hash']).first()
+                            if not tx:
+                                tx = Transaction(txhash=op['hash'])
+                            if 'script' in content:
+                                tx.contract_micheline = content['script']
                             spool = not tx.contract_address
                             tx.level = current_level
                             tx.contract_address = result['originated_contracts'][0]
+                            if tx.contract_address in to_import:
+                                to_import.remove(tx.contract_address)
                             tx.gas = content['fee']
                             tx.state_set('done')
                             if spool:
@@ -369,6 +393,9 @@ class Provider(BaseProvider):
 
         blockchain.max_level = start_level - 1  # consider head as suceptible to change
         blockchain.save()
+        if full:
+            for contract in import_contracts:
+                contract.searched.add(blockchain)
 
     def sync_call(self, level, op, content, contracts, blockchain):
         contract = contracts.get(contract_address=content['destination'])
