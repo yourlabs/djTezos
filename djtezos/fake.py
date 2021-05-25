@@ -3,6 +3,7 @@ import random
 import time
 import os
 
+from .models import Transaction
 from .provider import BaseProvider
 
 logger = logging.getLogger('djtezos.tezos')
@@ -44,6 +45,9 @@ class Provider(BaseProvider):
         if not transaction.contract_address:
             transaction.contract_address = fakehash('c0n7r4c7')
         transaction.gas = 1337
+
+    def watch_blockchain(self, blockchain):
+        Transaction.objects.filter(sender__blockchain=blockchain).update(state='done')
 
 
 class FailDeploy(Provider):
