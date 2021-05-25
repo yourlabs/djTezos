@@ -30,8 +30,8 @@ class AccountRouter(crudlfap.Router):
     views = [
         AccountCreateView,
         crudlfap.DeleteObjectsView,
-        crudlfap.DeleteView,
         crudlfap.DetailView,
+        crudlfap.DeleteView,
         crudlfap.ListView.clone(
             table_sequence=(
                 'id',
@@ -123,8 +123,8 @@ class TransactionRouter(TransactionRouterMixin, crudlfap.Router):
     icon = 'compare_arrows'
     views = [
         crudlfap.DeleteObjectsView,
-        crudlfap.DeleteView,
         crudlfap.DetailView,
+        crudlfap.DeleteView,
         crudlfap.ListView.clone(
             table_sequence=(
                 'state',
