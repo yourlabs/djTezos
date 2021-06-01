@@ -12,7 +12,7 @@ test:
     POSTGRES_USER: djtezos
     POSTGRES_PASSWORD: djtezos
   script:
-  - pacman --noconfirm -S uwsgi uwsgi-plugin-python
+  - pacman --noconfirm -Sy uwsgi uwsgi-plugin-python
   - pip install -e .[test]
   - DJANGO_SETTINGS_MODULE=djtezos.test_settings py.test -sv
 
