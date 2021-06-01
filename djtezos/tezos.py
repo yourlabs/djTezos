@@ -178,22 +178,23 @@ class Provider(BaseProvider):
             time.sleep(1)
         return opg
 
-    @retry(reraise=True, stop=stop_after_attempt(RETRIES))
     def deploy(self, transaction):
-        try:
-            if transaction.amount:
-                return self.transfer(transaction)
-            elif transaction.function:
-                return self.send(transaction)
-            else:
-                return self.originate(transaction)
-        except RpcError as rpc_error:
-            if rpc_error.args[0]['kind'] == 'temporary':
-                raise TemporaryError(*rpc_error.args)
-            elif rpc_error.args[0]['kind'] == 'permanent':
-                raise PermanentError(*rpc_error.args)
-            raise
-
+        tries = 30
+        while tries:
+            try:
+                if transaction.amount:
+                    return self.transfer(transaction)
+                elif transaction.function:
+                    return self.send(transaction)
+                else:
+                    return self.originate(transaction)
+            except RpcError as rpc_error:
+                if rpc_error.args[0]['kind'] == 'temporary':
+                    if tries:
+                        tries -= 1
+                        time.sleep(30 - tries)
+                        continue
+                raise
 
     def originate(self, transaction):
         logger.debug(f'{transaction}.originate({transaction.args}): start')
