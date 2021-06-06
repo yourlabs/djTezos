@@ -187,16 +187,6 @@ class TransactionManager(InheritanceManagerMixin, models.Manager):
         return TransactionQuerySet(self.model)
 
 
-def deploy_queue(pk):
-    tx = Transaction.objects.get(pk=pk)
-    if tx.function:
-        if not tx.contract.contract_address:
-            return  # don't deploy calls before their contract is deployed
-
-    if not tx.txhash:
-        tx.deploy()
-
-
 class Transaction(models.Model):
     id = models.UUIDField(
         primary_key=True,
@@ -264,15 +254,20 @@ class Transaction(models.Model):
         blank=True,
         db_index=True,
     )
+    last_fail = models.DateTimeField(
+        null=True,
+        blank=True,
+        auto_now_add=True,
+    )
 
     STATE_CHOICES = (
         ('held', _('Held')),
+        ('aborted', _('Aborted')),
         ('deploy', _('To deploy')),
         ('deploying', _('Deploying')),
-        ('deploy-aborted', _('Deploy aborted')),
+        ('retrying', _('Retrying')),
         ('watch', _('To watch')),
         ('watching', _('Watching')),
-        ('watch-aborted', _('Watch aborted')),
         ('done', _('Finished')),
     )
     state = models.CharField(
@@ -320,46 +315,13 @@ class Transaction(models.Model):
         if self.state not in self.states:
             raise Exception('Invalid state', self.state)
 
-        res = super().save(*args, **kwargs)
-
-        if self.state == 'deploy':
-            caller = Caller.objects.get_or_create(
-                callback='djtezos.models.deploy_queue',
-                kwargs=dict(pk=str(self.pk)),
-            )[0].spool('blockchain')
-
-        return res
-
+        return super().save(*args, **kwargs)
 
     def call(self, **kwargs):
         return Transaction.objects.create(
             contract=self,
             **kwargs
         )
-
-    def deploy(self):
-        self.state_set('deploying')
-        tries = 30
-        while tries:
-            try:
-                self.provider.deploy(self)
-            except Exception as exception:
-                if isinstance(exception, requests.exceptions.ConnectionError):
-                    if tries:
-                        # forgive connection errors
-                        tries -= 1
-                        time.sleep(tries)
-                        continue
-                self.error = str(exception)
-                logger.exception(f'{self} error {self.error}')
-                self.state_set('deploy-aborted')
-            else:
-                self.error = ''
-                if self.function or self.amount:
-                    self.state_set('done')
-                else:
-                    self.state_set('watching')
-            break
 
     def state_set(self, state):
         self.state = state

@@ -178,22 +178,12 @@ class Provider(BaseProvider):
         return opg
 
     def deploy(self, transaction):
-        tries = 30
-        while tries:
-            try:
-                if transaction.amount:
-                    return self.transfer(transaction)
-                elif transaction.function:
-                    return self.send(transaction)
-                else:
-                    return self.originate(transaction)
-            except RpcError as rpc_error:
-                if rpc_error.args[0]['kind'] == 'temporary':
-                    if tries:
-                        tries -= 1
-                        time.sleep(30 - tries)
-                        continue
-                raise
+        if transaction.amount:
+            return self.transfer(transaction)
+        elif transaction.function:
+            return self.send(transaction)
+        else:
+            return self.originate(transaction)
 
     def originate(self, transaction):
         logger.debug(f'{transaction}.originate({transaction.args}): start')
@@ -345,21 +335,6 @@ class Provider(BaseProvider):
                             # if script := content.get('script', None):
                             #     tx.contract_micheline = content['script']
                             tx.state_set('done')
-                            if spool:
-                                # check if any function call to deploy afterward
-                                calls = Transaction.objects.filter(
-                                    contract_id=tx.pk,
-                                    txhash=None,
-                                ).exclude(
-                                    function=None
-                                ).order_by('created_at')
-
-                                if calls:
-                                    for call in calls:
-                                        Caller.objects.get_or_create(
-                                            callback='djtezos.models.deploy_queue',
-                                            kwargs=dict(pk=str(call.pk)),
-                                        )[0].spool('blockchain')
 
                         elif content['kind'] == 'transaction':
                             print(f'Syncing transaction from {op["hash"]}')
