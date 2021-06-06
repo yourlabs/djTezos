@@ -356,6 +356,9 @@ class Transaction(models.Model):
         code = self.blockchain.endpoint.rstrip('/').split('/')[-1]
         return f'https://{code}.tzkt.io/{self.txhash}/'
 
+    def get_better_url(self):
+        return f'https://better-call.dev/search?text={self.txhash or self.contract_address}'
+
 
 class ContractManager(TransactionManager):
     def get_queryset(self):
