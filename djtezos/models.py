@@ -178,7 +178,9 @@ class Blockchain(models.Model):
 class TransactionQuerySet(InheritanceQuerySetMixin, models.QuerySet):
     def for_user(self, user):
         return self.filter(
-            Q(sender__owner=user) | Q(receiver__owner=user),
+            Q(sender__owner=user)
+            | Q(receiver__owner=user)
+            | Q(users=user)
         )
 
 
@@ -205,6 +207,10 @@ class Transaction(models.Model):
         blank=True,
         null=True,
         on_delete=models.CASCADE,
+    )
+    users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
     )
     created_at = models.DateTimeField(
         null=True,
@@ -312,6 +318,7 @@ class Transaction(models.Model):
             not self.amount
             and not self.function
             and not self.contract_micheline
+            and not self.contract_address
         ):
             raise ValidationError('Requires amount, function or micheline')
 
