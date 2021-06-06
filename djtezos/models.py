@@ -102,9 +102,9 @@ class Account(models.Model):
     balance = models.DecimalField(
         max_digits=18,
         decimal_places=9,
-        null=True,
         blank=True,
         editable=False,
+        default=0,
     )
     name = models.CharField(max_length=100)
 
