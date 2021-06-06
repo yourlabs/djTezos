@@ -283,7 +283,16 @@ class Transaction(models.Model):
     objects = TransactionManager()
 
     def __str__(self):
-        return self.txhash or self.contract_name or str(self.pk)
+        if self.txhash:
+            return self.txhash
+        elif self.function:
+            return f'{self.contract_name}.{self.function}()'
+        elif self.contract_name:
+            return self.contract_name
+        elif self.amount:
+            return f'{self.amount}xTZ'
+        else:
+            return str(self.pk)
 
     @property
     def blockchain(self):
