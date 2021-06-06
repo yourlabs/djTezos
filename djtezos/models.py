@@ -178,23 +178,15 @@ class Blockchain(models.Model):
 class TransactionQuerySet(InheritanceQuerySetMixin, models.QuerySet):
     def for_user(self, user):
         return self.filter(
-            Q(sender__owner=user) | Q(receiver__owner=user),
+            Q(sender__owner=user)
+            | Q(receiver__owner=user)
+            | Q(users=user)
         )
 
 
 class TransactionManager(InheritanceManagerMixin, models.Manager):
     def get_queryset(self):
         return TransactionQuerySet(self.model)
-
-
-def deploy_queue(pk):
-    tx = Transaction.objects.get(pk=pk)
-    if tx.function:
-        if not tx.contract.contract_address:
-            return  # don't deploy calls before their contract is deployed
-
-    if not tx.txhash:
-        tx.deploy()
 
 
 class Transaction(models.Model):
@@ -215,6 +207,10 @@ class Transaction(models.Model):
         blank=True,
         null=True,
         on_delete=models.CASCADE,
+    )
+    users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
     )
     created_at = models.DateTimeField(
         null=True,
@@ -264,15 +260,20 @@ class Transaction(models.Model):
         blank=True,
         db_index=True,
     )
+    last_fail = models.DateTimeField(
+        null=True,
+        blank=True,
+        auto_now_add=True,
+    )
 
     STATE_CHOICES = (
         ('held', _('Held')),
+        ('aborted', _('Aborted')),
         ('deploy', _('To deploy')),
         ('deploying', _('Deploying')),
-        ('deploy-aborted', _('Deploy aborted')),
+        ('retrying', _('Retrying')),
         ('watch', _('To watch')),
         ('watching', _('Watching')),
-        ('watch-aborted', _('Watch aborted')),
         ('done', _('Finished')),
     )
     state = models.CharField(
@@ -288,7 +289,16 @@ class Transaction(models.Model):
     objects = TransactionManager()
 
     def __str__(self):
-        return self.txhash or self.contract_name or str(self.pk)
+        if self.txhash:
+            return self.txhash
+        elif self.function:
+            return f'{self.contract_name}.{self.function}()'
+        elif self.contract_name:
+            return self.contract_name
+        elif self.amount:
+            return f'{self.amount}xTZ'
+        else:
+            return str(self.pk)
 
     @property
     def blockchain(self):
@@ -308,6 +318,7 @@ class Transaction(models.Model):
             not self.amount
             and not self.function
             and not self.contract_micheline
+            and not self.contract_address
         ):
             raise ValidationError('Requires amount, function or micheline')
 
@@ -320,46 +331,13 @@ class Transaction(models.Model):
         if self.state not in self.states:
             raise Exception('Invalid state', self.state)
 
-        res = super().save(*args, **kwargs)
-
-        if self.state == 'deploy':
-            caller = Caller.objects.get_or_create(
-                callback='djtezos.models.deploy_queue',
-                kwargs=dict(pk=str(self.pk)),
-            )[0].spool('blockchain')
-
-        return res
-
+        return super().save(*args, **kwargs)
 
     def call(self, **kwargs):
         return Transaction.objects.create(
             contract=self,
             **kwargs
         )
-
-    def deploy(self):
-        self.state_set('deploying')
-        tries = 30
-        while tries:
-            try:
-                self.provider.deploy(self)
-            except Exception as exception:
-                if isinstance(exception, requests.exceptions.ConnectionError):
-                    if tries:
-                        # forgive connection errors
-                        tries -= 1
-                        time.sleep(tries)
-                        continue
-                self.error = str(exception)
-                logger.exception(f'{self} error {self.error}')
-                self.state_set('deploy-aborted')
-            else:
-                self.error = ''
-                if self.function or self.amount:
-                    self.state_set('done')
-                else:
-                    self.state_set('watching')
-            break
 
     def state_set(self, state):
         self.state = state
@@ -377,6 +355,9 @@ class Transaction(models.Model):
     def get_tzkt_url(self):
         code = self.blockchain.endpoint.rstrip('/').split('/')[-1]
         return f'https://{code}.tzkt.io/{self.txhash}/'
+
+    def get_better_url(self):
+        return f'https://better-call.dev/search?text={self.txhash or self.contract_address}'
 
 
 class ContractManager(TransactionManager):
