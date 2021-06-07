@@ -1,3 +1,4 @@
+import logging
 from pytezos import pytezos
 
 from django.core.management.base import BaseCommand, CommandError
@@ -5,6 +6,9 @@ from django.db.models import Q
 from django.utils import timezone
 
 from djtezos.models import Blockchain, Contract, Call, Transfer
+
+
+logger = logging.getLogger('djtezos.djtezos_write')
 
 
 class Command(BaseCommand):
@@ -15,26 +19,34 @@ class Command(BaseCommand):
         return Contract.objects.filter(
             contract_address=None,
             txhash=None,
+            sender__blockchain__is_active=True,
         ).exclude(
-            Q(sender__balance__in=(0, None))
+            Q(sender__balance=None)
+            | Q(sender__balance=0)
             | Q(state__in=self.exclude_states)
+            | Q(contract_micheline=None)
+            | Q(contract_micheline='')
         )
 
     def calls(self):
         return Call.objects.filter(
             txhash=None,
+            sender__blockchain__is_active=True,
         ).exclude(
-            Q(sender__balance__in=(0, None))
+            Q(sender__balance=None)
+            | Q(sender__balance=0)
             | Q(state__in=self.exclude_states)
-            | Q(contract_micheline__in=(None, ''))
-            | Q(contract_address__in=(None, ''))
+            | Q(contract_address=None)
+            | Q(contract_address='')
         )
 
     def transfers(self):
         return Transfer.objects.filter(
             txhash=None,
+            sender__blockchain__is_active=True,
         ).exclude(
-            Q(sender__balance__in=(0, None))
+            Q(sender__balance=None)
+            | Q(sender__balance=0)
             | Q(state__in=self.exclude_states)
         )
 
@@ -42,38 +54,44 @@ class Command(BaseCommand):
         # is there any new transfer to deploy from an account with balance?
         transfer = self.transfers().filter(last_fail=None).first()
         if transfer:
-            print(f'Deploying transfer {transfer}')
+            logger.info(f'Deploying transfer {transfer}')
             return self.deploy(transfer)
+        logger.info('Found 0 transfers to deploy')
 
         # is there any new contract to deploy from an account with balance?
         contract = self.contracts().filter(last_fail=None).first()
 
         if contract:
-            print(f'Deploying contract {contract}')
+            logger.info(f'Deploying contract {contract}')
             return self.deploy(contract)
+        logger.info('Found 0 contracts to deploy')
 
         # is there any new contract call ready to deploy?
         call = self.calls().filter(last_fail=None).first()
         if call:
-            print(f'Calling function {call}')
+            logger.info(f'Calling function {call}')
             return self.deploy(call)
+        logger.info('Found 0 calls to send')
 
         # is there any transfer to retry from an account with balance?
         transfer = self.transfers().order_by('last_fail').first()
         if transfer:
-            print(f'Retrying transfer {transfer}')
+            logger.info(f'Retrying transfer {transfer}')
             return self.deploy(transfer)
+        logger.info('Found 0 transfer to retry')
 
         contract = self.contracts().order_by('last_fail').first()
 
         if contract:
-            print(f'Retrying contract {contract}')
+            logger.info(f'Retrying contract {contract}')
             return self.deploy(contract)
+        logger.info('Found 0 contract to retry')
 
         call = self.calls().order_by('last_fail').first()
         if call:
-            print(f'Retrying function {call}')
+            logger.info(f'Retrying function {call}')
             return self.deploy(call)
+        logger.info('Found 0 call to retry')
 
 
     def deploy(self, tx):

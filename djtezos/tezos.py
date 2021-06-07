@@ -332,9 +332,10 @@ class Provider(BaseProvider):
                             tx.level = current_level
                             tx.contract_address = result['originated_contracts'][0]
                             tx.gas = content['fee']
-                            # if script := content.get('script', None):
-                            #     tx.contract_micheline = content['script']
                             tx.state_set('done')
+                            tx.call_set.update(
+                                contract_address=tx.contract_address,
+                            )
 
                         elif content['kind'] == 'transaction':
                             print(f'Syncing transaction from {op["hash"]}')

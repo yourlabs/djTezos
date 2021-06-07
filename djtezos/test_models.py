@@ -6,6 +6,7 @@ import time
 from django.contrib.auth import get_user_model
 from djtezos.models import Blockchain, Contract, Call, Transfer, Transaction
 from djtezos.management.commands.djtezos_write import Command as Write
+from djtezos.management.commands.djtezos_balance import Command as Balance
 
 
 User = get_user_model()
@@ -67,6 +68,11 @@ def watch(tx, check):
     assert check(tx)
 
 
+def write():
+    Balance().handle()
+    Write().handle()
+
+
 @pytest.mark.django_db
 def test_story(user, account, tzlocal):
     contract = Transaction.objects.create(
@@ -76,7 +82,7 @@ def test_story(user, account, tzlocal):
         args={'int': '1'},
         state='deploy',
     )
-    Write().handle()
+    write()
     watch(contract, lambda tx: tx.state == 'done')
 
     call = Transaction.objects.create(
@@ -86,7 +92,7 @@ def test_story(user, account, tzlocal):
         args=[3],
         state='deploy',
     )
-    Write().handle()
+    write()
     watch(call, lambda tx: tx.state == 'done')
 
     balance = account.get_balance()
@@ -100,7 +106,7 @@ def test_story(user, account, tzlocal):
         amount=10000,
         state='deploy',
     )
-    Write().handle()
+    write()
     watch(transfer, lambda tx: tx.state == 'done')
 
     tries = 30
@@ -124,7 +130,7 @@ def test_wrong_storage(account):
         args={'string': 'aoeu'},
         state='deploy',
     )
-    Write().handle()
+    write()
     contract = Contract.objects.get(pk=contract.pk)
     assert contract.state == 'retrying'
     assert contract.error
@@ -139,7 +145,7 @@ def test_wrong_args(account):
         args={'int': '1'},
         state='deploy',
     )
-    Write().handle()
+    write()
     contract.refresh_from_db()
     assert contract.state == 'watching'
 
@@ -163,7 +169,7 @@ def test_wrong_args(account):
         args=['foobar'],
         state='deploy',
     )
-    Write().handle()
+    write()
     call = Call.objects.get(pk=call.pk)
     assert call.state == 'retrying'
     assert call.error
