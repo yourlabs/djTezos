@@ -253,7 +253,7 @@ class Provider(BaseProvider):
                 raise TemporaryError(f'Did not find operation {transaction.txhash}')
 
         level_operation = client.shell.blocks[opg['branch']].level()
-        offset = client.shell.head.metadata()['level']['level_position'] - level_operation
+        offset = client.shell.head.metadata()['level_info']['level_position'] - level_operation
         if self.blockchain.confirmation_blocks and offset < self.blockchain.confirmation_blocks:
             logger.info(f'{transaction} watch: not enough confirmation blocks')
             raise TemporaryError('Not enough confirmation blocks')
@@ -267,7 +267,7 @@ class Provider(BaseProvider):
 
     def watch_blockchain(self, blockchain):
         client = pytezos.using(shell=blockchain.endpoint)
-        start_level = current_level = client.shell.head.metadata()['level']['level_position']
+        start_level = current_level = client.shell.head.metadata()['level_info']['level_position']
 
         if blockchain.max_level and start_level < blockchain.max_level:
             # reorg
