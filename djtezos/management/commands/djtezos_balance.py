@@ -22,7 +22,7 @@ class Command(BaseCommand):
         from pytezos import pytezos
         try:
             client = pytezos.using(account.blockchain.endpoint)
-            data = pytezos.account(account.address)
+            data = client.account(account.address)
         except Exception as exception:
             logger.exception(exception)
             return
