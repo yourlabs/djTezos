@@ -104,9 +104,9 @@ class Command(BaseCommand):
 
             deploys_since_last_start = 0
             for logentry in reversed(tx.history):
-                if logentry[1] == 'deploying':
+                if logentry[0] == 'deploying':
                     deploys_since_last_start += 1
-                elif logentry[1] == 'aborted':
+                elif logentry[0] == 'aborted':
                     break
             if deploys_since_last_start >= 10:
                 message = 'Aborting because >= 10 failures,'
