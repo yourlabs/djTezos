@@ -14,7 +14,11 @@ class Command(BaseCommand):
     help = 'Synchronize balance'
 
     def handle(self, *args, **options):
-        accounts = Account.objects.select_related('blockchain')
+        accounts = Account.objects.select_related(
+            'blockchain'
+        ).filter(
+            blockchain__is_active=True
+        )
         for account in accounts:
             self.handle_account(account)
 
