@@ -62,6 +62,20 @@ class BlockchainAdmin(admin.ModelAdmin):
 admin.site.register(Blockchain, BlockchainAdmin)
 
 
+from django import forms
+
+class TransactionForm(forms.ModelForm):
+    blockchain = forms.ModelChoiceField(queryset=Blockchain.objects.all())
+
+    class Meta:
+        fields = (
+            'sender',
+            'receiver',
+            'users',
+        )
+        model = Transaction
+
+
 class TransactionAdmin(admin.ModelAdmin):
     def sender_name(self, obj):
         return obj.sender.owner if obj.sender_id else ""
@@ -119,12 +133,50 @@ class TransactionAdmin(admin.ModelAdmin):
         'gas',
         'contract',
         'explorer_link',
+        'history',
+        'error',
+        'level',
+        'gas',
+        'gasprice',
     )
 
 
 admin.site.register(Transaction, TransactionAdmin)
 
 
-admin.site.register(Contract)
+class ContractAdmin(TransactionAdmin):
+    exclude = (
+        'contract',
+        'receiver',
+        'gas',
+        'gasprice',
+        'blockchain',
+        'txhash',
+        'function',
+    )
+
+    def get_form(self, request, obj=None, change=False, **kwargs):
+        django_form = super().get_form(request, obj, change, **kwargs)
+
+        if obj is not None:
+            return django_form
+
+        class Form(django_form):
+            blockchain = forms.ModelChoiceField(
+                queryset=Blockchain.objects.all(),
+                required=False,
+            )
+
+            def clean(self):
+                data = super().clean()
+                if not data['sender'] and not data['blockchain']:
+                    raise forms.ValidationError(
+                        'Sender or blockchain required'
+                    )
+                return data
+
+        return Form
+
+admin.site.register(Contract, ContractAdmin)
 admin.site.register(Call)
 admin.site.register(Transfer)

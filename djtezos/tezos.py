@@ -139,11 +139,17 @@ class Provider(BaseProvider):
         balance = client.account()['balance']
         return int(balance)
 
-    def get_client(self, private_key, reveal=False, sender=None):
-        client = pytezos.using(
-            key=Key.from_secret_exponent(private_key),
-            shell=self.blockchain.endpoint,
-        )
+    def get_client(self, private_key=None, reveal=False, sender=None):
+        if private_key:
+            client = pytezos.using(
+                key=Key.from_secret_exponent(private_key),
+                shell=self.blockchain.endpoint,
+            )
+        else:
+            client = pytezos.using(
+                shell=self.blockchain.endpoint,
+            )
+
         if reveal:
             # key reveal dance
             try:
@@ -295,7 +301,7 @@ class Provider(BaseProvider):
 
         if not blockchain.max_level:
             # go with an arbitrary backlog
-            max_depth = 500
+            max_depth = 5000
 
         hashes = Transaction.objects.filter(
             sender__blockchain=blockchain
@@ -369,3 +375,8 @@ class Provider(BaseProvider):
         call.gas = content['fee']
         call.level = level
         call.save()
+
+    def sync_contract(self, contract):
+        client = self.get_client()
+        contract = client.contract(contract.contract_address)
+        breakpoint()

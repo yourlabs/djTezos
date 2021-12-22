@@ -8,7 +8,6 @@ setup(
     install_requires=[
         'django-model-utils',
         'cryptography',
-        'djcall',
         'tenacity',
         'pytezos',
     ],

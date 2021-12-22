@@ -1,7 +1,16 @@
 # djTezos: Django-Tezos
 
-Django-Tezos provides Django Models and uWSGI Spooler (djCall) integration with
-PyTezos.
+Django-Tezos allows you to build webdApps - dApps enhanced with a web backend.
+Django provides the web framework that is nice to work with, djtezos provides:
+
+- blockchain indexer
+- blockchain writer
+- private key vault
+- multiple blockchain support (with new provider class implementations)
+
+In addition to these features, djtezos differenciates itself from dipdup
+because it is expandable: it's just a module you add to your Django project, in
+which you can add models, endpoints, and have an admin interface for free.
 
 ## Install djTezos
 
@@ -9,16 +18,31 @@ Install djtezos with pip then add djtezos to INSTALLED_APPS.
 
 Run ./manage.py migrate to create tables for djtezos models.
 
-You need a SECRET_KEY that is sufficiently long for AES.
+You need a SECRET_KEY that is sufficiently long to be used for AES.
+
+## Demo project
+
+You may also use the example project:
+
+- clone the repo
+- in the repo, run `./manage.py migrate`
+- then, run `./manage.py createsuperuser`
+- then, run `./manage.py runserver`
+- then, connect to http://localhost:8000/admin
+- you will be able to follow this tutorial.
 
 ## Add Blockchains
 
-Blockchain is the first model you have to manage, you can do it in the admin.
-For any blockchain, you can choose a Python Provider Class, such as
+Blockchain is the first model you have to manage, because nothing will happen
+if you don't create a Blockchain object in your database.
+
+For any blockchain, you need choose a Python Provider Class, such as
 ``djtezos.tezos.Provider`` or ``djtezos.fake.Provider`` for a mock that you can
 use in tests.
 
-Example:
+### Sandbox example
+
+Example with a local:
 
 ```py
 tzlocal = Blockchain.objects.create(
@@ -41,6 +65,44 @@ services:
 - name: yourlabs/tezos
   alias: tz
 ```
+
+### Mainnet example
+
+Open http://localhost:8000/admin/djtezos/blockchain/add/ and save a Blockchain
+with:
+
+-
+
+## Indexer
+
+For the indexer to watch a contract for new calls, you need to insert the
+contract in your database.
+
+One easy way to find a contract is to go on
+https://better-call.dev/stats/mainnet/fa2 and find a contract that has calls
+and is as recent as possible, so that indexation doesn't take too long.
+
+, you can do it in the admin on
+http://localhost:8000/admin/djtezos/contract/add/ and set:
+
+, ie.:
+
+```py
+from djtezos.models import Contract
+
+Contract.objects.create(
+)
+```
+
+The indexer is a script that runs and exit. You can have it running
+continuously with a shell loop ie.:
+
+```
+sh -c 'while true; do ./manage.py djtezos_sync; sleep 60; done'
+```
+
+This will call the `blockchain.provider.watch_blockchain()` method for each
+blockchain object in the database that has `is_active=True`.
 
 ## Create accounts
 

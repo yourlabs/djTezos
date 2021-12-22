@@ -27,8 +27,6 @@ from cryptography.hazmat.primitives.ciphers import (
     Cipher, algorithms, modes)
 from cryptography.hazmat.backends import default_backend
 
-from djcall.models import Caller
-
 from model_utils.managers import (
     InheritanceManagerMixin,
     InheritanceQuerySetMixin,
@@ -199,6 +197,7 @@ class Transaction(models.Model):
         'Account',
         related_name='transactions_sent',
         null=True,
+        blank=True,
         on_delete=models.CASCADE,
     )
     receiver = models.ForeignKey(
@@ -230,7 +229,7 @@ class Transaction(models.Model):
     )
     gasprice = models.BigIntegerField(blank=True, null=True)
     gas = models.BigIntegerField(blank=True, null=True)
-    contract_address = models.CharField(max_length=255, null=True)
+    contract_address = models.CharField(max_length=255, null=True, blank=True)
     contract_name = models.CharField(max_length=100, null=True)
     contract_source = models.TextField(null=True, blank=True)
     contract_micheline = models.JSONField(null=True, blank=True, default=list)
@@ -314,6 +313,9 @@ class Transaction(models.Model):
         return self.sender.blockchain.provider
 
     def save(self, *args, **kwargs):
+        if not self.sender and not self.contract_address:
+            raise ValidationError('Requires sender or contract_address')
+
         if (
             not self.amount
             and not self.function
@@ -367,6 +369,10 @@ class ContractManager(TransactionManager):
 
 class Contract(Transaction):
     objects = ContractManager()
+
+    def sync(self, blockchain):
+        blockchain.provider.sync_contract(self)
+        self.save()
 
     class Meta:
         proxy = True
