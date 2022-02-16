@@ -3,6 +3,11 @@
 Django-Tezos provides Django Models and uWSGI Spooler (djCall) integration with
 PyTezos.
 
+# DEPRECATION WARNING
+
+This app is deprecated in favor of DjWebdApp, which supports multiple
+blockchains and indexation to build true dApps.
+
 ## Install djTezos
 
 Install djtezos with pip then add djtezos to INSTALLED_APPS.
